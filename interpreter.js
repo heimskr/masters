@@ -92,6 +92,20 @@ function evaluate(node, scopes) {
 				return evaluate(node.left, scopes) | evaluate(node.right, scopes);
 			case "^":
 				return evaluate(node.left, scopes) ^ evaluate(node.right, scopes);
+			case "==":
+				return evaluate(node.left, scopes) == evaluate(node.right, scopes);
+			case "!=":
+				return evaluate(node.left, scopes) != evaluate(node.right, scopes);
+			case "<":
+				return evaluate(node.left, scopes) < evaluate(node.right, scopes);
+			case ">":
+				return evaluate(node.left, scopes) > evaluate(node.right, scopes);
+			case "<=":
+				return evaluate(node.left, scopes) <= evaluate(node.right, scopes);
+			case ">=":
+				return evaluate(node.left, scopes) >= evaluate(node.right, scopes);
+			case "**":
+				return evaluate(node.left, scopes) ** evaluate(node.right, scopes);
 			case "&&": {
 				const left = evaluate(node.left, scopes);
 				return left? evaluate(node.right, scopes) : left;
