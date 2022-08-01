@@ -27,11 +27,29 @@ const objects_test = `
 	print(obj);
 `;
 
-const to_parse = objects_test;
+const functions_test = `
+	function double(x) {
+		return x * 2;
+	}
+
+	print(double(42));
+	print((function(x) { return !x; })(false));
+	print((x => -x)(64));
+`;
+
+const to_parse = functions_test;
 
 const parsed = acorn.parse(to_parse, {
 	ecmaVersion: "latest"
 });
+
+function makeDefaultScope() {
+	return [{
+		print(s, this_obj, params) {
+			console.log(...params);
+		}
+	}];
+}
 
 function lookup(name, scopes) {
 	for (let i = scopes.length - 1; 0 <= i; --i) {
@@ -59,18 +77,42 @@ function insert(name, value, scopes) {
 	scopes[scopes.length - 1][name] = value;
 }
 
+function makeFunction(node) {
+	return (s, this_obj, args) => {
+		let i = 0, last_scope = {};
+
+		for (const param of node.params) {
+			if (param.type != "Identifier") {
+				console.error(param);
+				throw `Expected an identifier as a parameter, got "${param.type}"`;
+			}
+
+			last_scope[param.name] = args[i++];
+		}
+
+		if (this_obj !== undefined) {
+			last_scope.this = this_obj;
+		}
+
+		return interpret(node.body, [...s, last_scope])[1];
+	};
+}
+
 function interpret(node, scopes) {
 	if (node.type == "Program") {
-		scopes = [[]];
+		scopes = makeDefaultScope();
 
 		for (const subnode of node.body) {
 			interpret(subnode, scopes);
 		}
 	} else if (node.type == "BlockStatement") {
-		scopes.push([]);
+		scopes.push({});
 
 		for (const subnode of node.body) {
-			interpret(subnode, scopes);
+			const [should_return, return_value] = interpret(subnode, scopes);
+			if (should_return) {
+				return [true, return_value];
+			}
 		}
 	} else if (node.type == "VariableDeclaration") {
 		for (const declaration of node.declarations) {
@@ -91,13 +133,24 @@ function interpret(node, scopes) {
 		evaluate(node.expression, scopes);
 	} else if (node.type == "IfStatement") {
 		if (evaluate(node.test, scopes)) {
-			interpret(node.consequent, scopes);
+			return interpret(node.consequent, scopes);
 		} else {
-			interpret(node.alternate, scopes);
+			return interpret(node.alternate, scopes);
 		}
+	} else if (node.type == "FunctionDeclaration") {
+		if (node.id.type != "Identifier") {
+			console.error(node.id);
+			throw `Expected an identifier as a FunctionDeclaration id, got "${node.id.type}"`;
+		}
+
+		insert(node.id.name, makeFunction(node), scopes);
+	} else if (node.type == "ReturnStatement") {
+		return [true, evaluate(node.argument, scopes)];
 	} else {
-		console.log(node);
+		console.error("Unrecognized node in interpret:", node);
 	}
+
+	return [false, undefined];
 }
 
 function evaluate(node, scopes) {
@@ -149,12 +202,39 @@ function evaluate(node, scopes) {
 	} else if (node.type == "Identifier") {
 		return lookup(node.name, scopes);
 	} else if (node.type == "CallExpression") {
-		if (node.callee.type != "Identifier" || node.callee.name != "print") {
-			console.error(node.callee);
-			throw `Unsupported callee: ${JSON.stringify(node.callee)}`;
+		let callee = undefined;
+		let this_obj = undefined;
+		if (node.callee.type == "Identifier") {
+			callee = lookup(node.callee.name, scopes);
+			this_obj = {};
+		} else if (node.callee.type == "FunctionExpression") {
+			callee = makeFunction(node.callee);
+			this_obj = {};
+		} else if (node.callee.type == "ArrowFunctionExpression") {
+			callee = (s, _, args) => {
+				let i = 0, last_scope = {};
+
+				for (const param of node.callee.params) {
+					if (param.type != "Identifier") {
+						console.error(param);
+						throw `Expected an identifier as a parameter, got "${param.type}"`;
+					}
+
+					last_scope[param.name] = args[i++];
+				}
+
+				return evaluate(node.callee.body, [...s, last_scope]);
+			};
+		} else {
+			console.error("UNIMPLEMENTED", node.callee);
 		}
 
-		console.log(...node.arguments.map(argument => evaluate(argument, scopes)));
+		if (typeof callee != "function") {
+			console.error({callee});
+			throw "Not a function";
+		}
+
+		return callee(scopes, this_obj, node.arguments.map(argument => evaluate(argument, scopes)));
 	} else if (node.type == "UnaryExpression") {
 		switch (node.operator) {
 			case "-":
