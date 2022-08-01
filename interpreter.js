@@ -3,11 +3,13 @@
 const acorn = require("acorn");
 
 const to_parse = `
-	let x = 42 + 0;
-	{
-		let y = x / 2;
-		print(y);
-	}
+	let x = 42 + -3;
+	if (x == 42) {
+		print("yes");
+	} else if (x == 40) {
+		print(40);
+	} else
+		print(false);
 `;
 
 const parsed = acorn.parse(to_parse, {
@@ -70,6 +72,14 @@ function interpret(node, scopes) {
 		}
 	} else if (node.type == "ExpressionStatement") {
 		evaluate(node.expression, scopes);
+	} else if (node.type == "IfStatement") {
+		if (evaluate(node.test, scopes)) {
+			interpret(node.consequent, scopes);
+		} else {
+			interpret(node.alternate, scopes);
+		}
+	} else {
+		console.log(node);
 	}
 }
 
@@ -114,6 +124,8 @@ function evaluate(node, scopes) {
 				const left = evaluate(node.left, scopes);
 				return left? left : evaluate(node.right, scopes);
 			}
+			default:
+				throw `Unrecognized binary operator: "${node.operator}"`;
 		}
 	} else if (node.type == "Literal") {
 		return node.value;
@@ -125,6 +137,15 @@ function evaluate(node, scopes) {
 		}
 
 		console.log(...node.arguments.map(argument => evaluate(argument, scopes)));
+	} else if (node.type == "UnaryExpression") {
+		switch (node.operator) {
+			case "-":
+				return -evaluate(node.argument, scopes);
+			case "!":
+				return !evaluate(node.argument, scopes);
+			default:
+				throw `Unrecognized unary operator: "${node.operator}"`;
+		}
 	} else {
 		console.log(node);
 		return undefined;
