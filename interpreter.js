@@ -2,8 +2,8 @@
 
 const acorn = require("acorn");
 
-const to_parse = `
-	let x = 42 + -3;
+const if_else_test = `
+	let x = 42 + -2;
 	if (x == 42) {
 		print("yes");
 	} else if (x == 40) {
@@ -11,6 +11,23 @@ const to_parse = `
 	} else
 		print(false);
 `;
+
+const objects_test = `
+	let d = 100;
+
+	let obj = {
+		a: 42,
+		b: {
+			c: 64
+		},
+		d,
+		f(x) { return x + 1000; }
+	};
+
+	print(obj);
+`;
+
+const to_parse = objects_test;
 
 const parsed = acorn.parse(to_parse, {
 	ecmaVersion: "latest"
@@ -133,6 +150,7 @@ function evaluate(node, scopes) {
 		return lookup(node.name, scopes);
 	} else if (node.type == "CallExpression") {
 		if (node.callee.type != "Identifier" || node.callee.name != "print") {
+			console.error(node.callee);
 			throw `Unsupported callee: ${JSON.stringify(node.callee)}`;
 		}
 
@@ -146,6 +164,18 @@ function evaluate(node, scopes) {
 			default:
 				throw `Unrecognized unary operator: "${node.operator}"`;
 		}
+	} else if (node.type == "ObjectExpression") {
+		let out = {};
+
+		for (const property of node.properties) {
+			if (property.key.type == "Identifier") {
+				out[property.key.name] = evaluate(property.value, scopes);
+			} else {
+				out[evaluate(property.key, scopes)] = evaluate(property.value, scopes);
+			}
+		}
+
+		return out;
 	} else {
 		console.log(node);
 		return undefined;
