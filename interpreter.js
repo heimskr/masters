@@ -5,11 +5,11 @@ const acorn = require("acorn");
 const if_else_test = `
 	let x = 42 + -2;
 	if (x == 42) {
-		print("yes");
+		console.log("yes");
 	} else if (x == 40) {
-		print(40);
+		console.log(40);
 	} else
-		print(false);
+		console.log(false);
 `;
 
 const objects_test = `
@@ -24,7 +24,7 @@ const objects_test = `
 		f(x) { return x + 1000; }
 	};
 
-	print(obj.f(1));
+	console.log(obj.f(1));
 `;
 
 const functions_test = `
@@ -32,12 +32,22 @@ const functions_test = `
 		return x * 2;
 	}
 
-	print(double(42));
-	print((function(x) { return !x; })(false));
-	print((x => -x)(64));
+	console.log(double(42));
+	console.log((function(x) { return !x; })(false));
+	console.log((x => -x)(64));
 `;
 
-const to_parse = objects_test;
+const fibonacci_test = `
+	function bad_fibo(n) {
+		if (n <= 1)
+			return n;
+		return bad_fibo(n - 2) + bad_fibo(n - 1);
+	}
+
+	console.log(bad_fibo(10));
+`;
+
+const to_parse = fibonacci_test;
 
 const parsed = acorn.parse(to_parse, {
 	ecmaVersion: "latest"
@@ -45,8 +55,11 @@ const parsed = acorn.parse(to_parse, {
 
 function makeDefaultScope() {
 	return [{
-		print(s, this_obj, params) {
-			console.log(...params);
+		console: {
+			log  (s, this_obj, params) { console.log  (...params); },
+			info (s, this_obj, params) { console.info (...params); },
+			error(s, this_obj, params) { console.error(...params); },
+			warn (s, this_obj, params) { console.warn (...params); },
 		}
 	}];
 }
@@ -151,7 +164,7 @@ function interpret(node, scopes) {
 	} else if (node.type == "IfStatement") {
 		if (evaluate(node.test, scopes)) {
 			return interpret(node.consequent, scopes);
-		} else {
+		} else if (node.alternate) {
 			return interpret(node.alternate, scopes);
 		}
 	} else if (node.type == "FunctionDeclaration") {
