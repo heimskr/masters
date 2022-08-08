@@ -47,7 +47,13 @@ const fibonacci_test = `
 	console.log(bad_fibo(10));
 `;
 
-const to_parse = fibonacci_test;
+const arrays_test = `
+	let arr = [1, 2, 3];
+	arr[3] = 4;
+	console.log(arr);
+`;
+
+const to_parse = arrays_test;
 
 const parsed = acorn.parse(to_parse, {
 	ecmaVersion: "latest"
@@ -264,6 +270,8 @@ function evaluate(node, scopes) {
 		}
 
 		return out;
+	} else if (node.type == "ArrayExpression") {
+		return node.elements.map(element => evaluate(element, scopes));
 	} else if (node.type == "MemberExpression") {
 		let obj = evaluate(node.object, scopes);
 
