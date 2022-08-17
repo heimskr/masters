@@ -53,7 +53,18 @@ const arrays_test = `
 	console.log(arr);
 `;
 
-const to_parse = arrays_test;
+const while_test = `
+	let i = 0;
+	while (i < 100) {
+		if (++i % 2 == 0)
+			continue;
+		console.log(i);
+		if (i == 91)
+			break;
+	}
+`;
+
+const to_parse = while_test;
 
 const parsed = acorn.parse(to_parse, {
 	ecmaVersion: "latest"
@@ -94,6 +105,16 @@ function insert(name, value, scopes) {
 	}
 
 	scopes[scopes.length - 1][name] = value;
+}
+
+function update(name, scopes, value) {
+	for (let i = scopes.length - 1; 0 <= i; --i) {
+		if (name in scopes[i]) {
+			return scopes[i][name] = value;
+		}
+	}
+
+	throw `Couldn't find name "${name}"`;
 }
 
 function makeFunction(node) {
@@ -147,9 +168,12 @@ function interpret(node, scopes) {
 		for (const subnode of node.body) {
 			const [should_return, return_value] = interpret(subnode, scopes);
 			if (should_return) {
-				return [true, return_value];
+				scopes.pop();
+				return [should_return, return_value];
 			}
 		}
+
+		scopes.pop();
 	} else if (node.type == "VariableDeclaration") {
 		for (const declaration of node.declarations) {
 			if (declaration.id.type != "Identifier") {
@@ -182,6 +206,17 @@ function interpret(node, scopes) {
 		insert(node.id.name, makeFunction(node), scopes);
 	} else if (node.type == "ReturnStatement") {
 		return [true, evaluate(node.argument, scopes)];
+	} else if (node.type == "BreakStatement") {
+		return ["break", undefined];
+	} else if (node.type == "ContinueStatement") {
+		return ["continue", undefined];
+	} else if (node.type == "WhileStatement") {
+		while (evaluate(node.test, scopes)) {
+			const [should_return, return_value] = interpret(node.body, scopes);
+			if (should_return && should_return != "continue") {
+				return [false, return_value];
+			}
+		}
 	} else {
 		console.error("Unrecognized node in interpret:", node);
 	}
@@ -284,6 +319,24 @@ function evaluate(node, scopes) {
 			return obj[node.property.name];
 		} else {
 			return obj[evaluate(node.property, scopes)];
+		}
+	} else if (node.type == "UpdateExpression") {
+		if (node.argument.type == "Identifier") {
+			const old_value = lookup(node.argument.name, scopes);
+			let new_value = old_value;
+
+			if (node.operator == "++") {
+				++new_value;
+			} else if (node.operator == "--") {
+				--new_value;
+			} else {
+				throw `Unrecognized UpdateExpression operator: ${node.operator}`;
+			}
+
+			update(node.argument.name, scopes, new_value);
+			return node.prefix? new_value : old_value;
+		} else {
+			throw `Unsupported argument type in UpdateExpression: ${node.argument.type}`;
 		}
 	} else {
 		console.error("Unrecognized node in evaluate:", node);
