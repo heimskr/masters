@@ -77,7 +77,7 @@ const assign_test = `
 	console.log(arr, x);
 `;
 
-const to_parse = assign_test;
+const to_parse = arrays_test;
 
 const parsed = acorn.parse(to_parse, {
 	ecmaVersion: "latest"
@@ -354,7 +354,7 @@ function evaluate(node, scopes) {
 		let left = node.left;
 		if (left.type == "MemberExpression") {
 			let stack = [left.property];
-			let obj = node.object;
+			let obj = left.object;
 			while (left.object && left.object.type == "MemberExpression") {
 				left = left.object;
 				stack.unshift(left.property);
