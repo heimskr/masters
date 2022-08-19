@@ -24,7 +24,7 @@ const objects_test = `
 		f(x) { return x + 1000; }
 	};
 
-	console.log(obj.f(1));
+	console.log(obj.f(obj.b.c));
 `;
 
 const functions_test = `
@@ -54,17 +54,30 @@ const arrays_test = `
 `;
 
 const while_test = `
-	let i = 0;
-	while (i < 100) {
-		if (++i % 2 == 0)
-			continue;
-		console.log(i);
-		if (i == 91)
-			break;
-	}
+let i = 0;
+while (i < 100) {
+	if (++i % 2 == 0)
+	continue;
+	console.log(i);
+	if (i == 91)
+	break;
+}
 `;
 
-const to_parse = while_test;
+const nested_test = `
+	let arr = [1, [2, 3], 4];
+	arr[1][0] = 0;
+	console.log(arr);
+`;
+
+const assign_test = `
+	let arr = [1, [2], 3];
+	let x;
+	arr[1][0] = x = 42;
+	console.log(arr, x);
+`;
+
+const to_parse = assign_test;
 
 const parsed = acorn.parse(to_parse, {
 	ecmaVersion: "latest"
@@ -73,10 +86,10 @@ const parsed = acorn.parse(to_parse, {
 function makeDefaultScope() {
 	return [{
 		console: {
-			log  (s, this_obj, params) { console.log  (...params); },
-			info (s, this_obj, params) { console.info (...params); },
-			error(s, this_obj, params) { console.error(...params); },
-			warn (s, this_obj, params) { console.warn (...params); },
+			log  (s, params) { console.log  (...params); },
+			info (s, params) { console.info (...params); },
+			error(s, params) { console.error(...params); },
+			warn (s, params) { console.warn (...params); },
 		}
 	}];
 }
@@ -118,7 +131,7 @@ function update(name, scopes, value) {
 }
 
 function makeFunction(node) {
-	return (s, this_obj, args) => {
+	return (s, args) => {
 		let i = 0, last_scope = {};
 
 		for (const param of node.params) {
@@ -130,19 +143,15 @@ function makeFunction(node) {
 			last_scope[param.name] = args[i++];
 		}
 
-		if (this_obj !== undefined) {
-			last_scope.this = this_obj;
-		}
-
 		return interpret(node.body, [...s, last_scope])[1];
 	};
 }
 
 function makeArrowFunction(node) {
-	return (s, _, args) => {
+	return (s, args) => {
 		let i = 0, last_scope = {};
 
-		for (const param of node.callee.params) {
+		for (const param of node.params) {
 			if (param.type != "Identifier") {
 				console.error(param);
 				throw `Expected an identifier as a parameter, got "${param.type}"`;
@@ -151,7 +160,7 @@ function makeArrowFunction(node) {
 			last_scope[param.name] = args[i++];
 		}
 
-		return evaluate(node.callee.body, [...s, last_scope]);
+		return evaluate(node.body, [...s, last_scope]);
 	};
 }
 
@@ -187,7 +196,7 @@ function interpret(node, scopes) {
 				throw `Interpreter error: name "${name}" already exists in scope`;
 			}
 
-			insert(name, evaluate(declaration.init, scopes), scopes);
+			insert(name, declaration.init === null? undefined : evaluate(declaration.init, scopes), scopes);
 		}
 	} else if (node.type == "ExpressionStatement") {
 		evaluate(node.expression, scopes);
@@ -283,7 +292,7 @@ function evaluate(node, scopes) {
 			throw "Not a function";
 		}
 
-		return callee(scopes, {}, node.arguments.map(argument => evaluate(argument, scopes)));
+		return callee(scopes, node.arguments.map(argument => evaluate(argument, scopes)));
 	} else if (node.type == "UnaryExpression") {
 		switch (node.operator) {
 			case "-":
@@ -337,6 +346,33 @@ function evaluate(node, scopes) {
 			return node.prefix? new_value : old_value;
 		} else {
 			throw `Unsupported argument type in UpdateExpression: ${node.argument.type}`;
+		}
+	} else if (node.type == "AssignmentExpression") {
+		// I really wish JS had pointers sometimes.
+		const value = evaluate(node.right, scopes);
+
+		let left = node.left;
+		if (left.type == "MemberExpression") {
+			let stack = [left.property];
+			let obj = node.object;
+			while (left.object && left.object.type == "MemberExpression") {
+				left = left.object;
+				stack.unshift(left.property);
+				if ("object" in left) {
+					obj = left.object;
+				}
+			}
+
+			obj = evaluate(obj, scopes);
+
+			while (1 < stack.length) {
+				obj = obj[evaluate(stack[0], scopes)];
+				stack.shift();
+			}
+
+			return obj[evaluate(stack[0], scopes)] = evaluate(node.right, scopes);
+		} else if (left.type == "Identifier") {
+			return update(left.name, scopes, evaluate(node.right, scopes));
 		}
 	} else {
 		console.error("Unrecognized node in evaluate:", node);
