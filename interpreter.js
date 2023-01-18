@@ -1,81 +1,16 @@
 #!/usr/bin/env node
 
 const acorn = require("acorn");
+const fs = require("fs");
 
-const if_else_test = `
-	let x = 42 + -2;
-	if (x == 42) {
-		console.log("yes");
-	} else if (x == 40) {
-		console.log(40);
-	} else
-		console.log(false);
-`;
-
-const objects_test = `
-	let d = 100;
-
-	let obj = {
-		a: 42,
-		b: {
-			c: 64
-		},
-		d,
-		f(x) { return x + 1000; }
-	};
-
-	console.log(obj.f(obj.b.c));
-`;
-
-const functions_test = `
-	function double(x) {
-		return x * 2;
-	}
-
-	console.log(double(42));
-	console.log((function(x) { return !x; })(false));
-	console.log((x => -x)(64));
-`;
-
-const fibonacci_test = `
-	function bad_fibo(n) {
-		if (n <= 1)
-			return n;
-		return bad_fibo(n - 2) + bad_fibo(n - 1);
-	}
-
-	console.log(bad_fibo(10));
-`;
-
-const arrays_test = `
-	let arr = [1, 2, 3];
-	arr[3] = 4;
-	console.log(arr);
-`;
-
-const while_test = `
-let i = 0;
-while (i < 100) {
-	if (++i % 2 == 0)
-	continue;
-	console.log(i);
-	if (i == 91)
-	break;
-}
-`;
-
-const nested_test = `
-	let arr = [1, [2, 3], 4];
-	arr[1][0] = 0;
-	console.log(arr);
-`;
-
-const assign_test = `
-	let arr = [1, [2], 3];
-	let x;
-	arr[1][0] = x = 42;
-	console.log(arr, x);
-`;
+const if_else_test   = fs.readFileSync("js/if_else.js",   "utf8");
+const objects_test   = fs.readFileSync("js/objects.js",   "utf8");
+const functions_test = fs.readFileSync("js/functions.js", "utf8");
+const fibonacci_test = fs.readFileSync("js/fibonacci.js", "utf8");
+const arrays_test    = fs.readFileSync("js/arrays.js",    "utf8");
+const while_test     = fs.readFileSync("js/while.js",     "utf8");
+const nested_test    = fs.readFileSync("js/nested.js",    "utf8");
+const assign_test    = fs.readFileSync("js/assign.js",    "utf8");
 
 const to_parse = arrays_test;
 
@@ -373,6 +308,8 @@ function evaluate(node, scopes) {
 			return obj[evaluate(stack[0], scopes)] = evaluate(node.right, scopes);
 		} else if (left.type == "Identifier") {
 			return update(left.name, scopes, evaluate(node.right, scopes));
+		} else {
+			throw `Unrecognized AssignmentExpression type: ${left.type}`;
 		}
 	} else {
 		console.error("Unrecognized node in evaluate:", node);

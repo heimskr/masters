@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "acorn": "^8.7.1"
+    "acorn": "^8.7.1",
+    "z3-solver": "^4.11.0"
   }
 }
