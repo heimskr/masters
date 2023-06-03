@@ -18,13 +18,24 @@ const char * stringify(Node::Type type) {
 		case Node::Type::Identifier: return "Identifier";
 		case Node::Type::VariableDeclarator: return "VariableDeclarator";
 		case Node::Type::VariableDeclaration: return "VariableDeclaration";
+		case Node::Type::ExpressionStatement: return "ExpressionStatement";
+		case Node::Type::BinaryExpression: return "BinaryExpression";
+		case Node::Type::ArrayExpression: return "ArrayExpression";
+		case Node::Type::Literal: return "Literal";
 		default:
 			return "???";
 	}
 }
 
 std::unique_ptr<Node> Node::fromJSON(const nlohmann::json &json) {
-	const std::string &type = json.at("type");
+	std::string type;
+
+	try {
+		type = json.at("type");
+	} catch (...) {
+		std::cerr << "\e[31m" << json.dump() << "\e[39m\n";
+		throw;
+	}
 
 	if (type == "Program")
 		return std::make_unique<ProgramNode>(json);
@@ -53,7 +64,13 @@ std::unique_ptr<Node> Node::fromJSON(const nlohmann::json &json) {
 	if (type == "ArrayExpression")
 		return std::make_unique<ArrayExpressionNode>(json);
 
-	std::cerr << json.dump() << std::endl;
+	if (type == "Literal")
+		return std::make_unique<LiteralNode>(json);
+
+	if (type == "AssignmentExpression")
+		return std::make_unique<AssignmentExpressionNode>(json);
+
+	std::cerr << "\e[31m" << json.dump() << "\e[39m\n";
 	throw std::invalid_argument("Node::fromJSON failed: type \"" + type + "\" not handled");
 }
 
@@ -104,7 +121,7 @@ IdentifierNode::IdentifierNode(const nlohmann::json &json): name(json.at("name")
 }
 
 VariableDeclaratorNode::VariableDeclaratorNode(const nlohmann::json &json):
-id(Node::fromJSON(json.at("id"))), init(Node::fromJSON(json.at("init"))) {
+id(Node::fromJSON(json.at("id"))), init(json.at("init").is_null()? nullptr : Node::fromJSON(json.at("init"))) {
 	absorbPosition(json);
 }
 
@@ -226,4 +243,41 @@ Value * ArrayExpressionNode::evaluate(Context &context) {
 		out->values.emplace_back(element->evaluate(context));
 
 	return out;
+}
+
+LiteralNode::LiteralNode(const nlohmann::json &json) {
+	const auto &value_json = json.at("value");
+	if (value_json.is_string())
+		value = value_json.get<std::string>();
+	else if (value_json.is_number())
+		value = value_json.get<double>();
+	else
+		throw std::runtime_error("Invalid literal value: " + value_json.dump());
+}
+
+Value * LiteralNode::evaluate(Context &context) {
+	if (std::holds_alternative<std::string>(value))
+		return context.makeValue<String>(std::get<std::string>(value));
+
+	if (std::holds_alternative<double>(value))
+		return context.makeValue<Number>(std::get<double>(value));
+
+	throw std::runtime_error("LiteralNode value has an invalid type");
+}
+
+AssignmentExpressionNode::AssignmentExpressionNode(const nlohmann::json &json):
+	left(Node::fromJSON(json.at("left"))), right(Node::fromJSON(json.at("right"))), op(json.at("operator")) {}
+
+Value * AssignmentExpressionNode::evaluate(Context &context) {
+
+}
+
+Value ** AssignmentExpressionNode::access(Context &context) {
+	if (left->getType() == Node::Type::Identifier) {
+		auto *identifier = dynamic_cast<IdentifierNode *>(left.get());
+		return context.stack.lookup(identifier->name);
+	}
+
+	throw std::logic_error("Assignment expression LHS type " + std::string(stringify(left->getType())) +
+		" unsupported");
 }

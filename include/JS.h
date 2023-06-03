@@ -28,7 +28,7 @@ class ScopeStack {
 		std::vector<Scope> scopes;
 
 	public:
-		Value * lookup(const std::string &name, bool *const_out = nullptr, ssize_t *depth_out = nullptr);
+		Value ** lookup(const std::string &name, bool *const_out = nullptr, ssize_t *depth_out = nullptr);
 		void insert(const std::string &name, Value *value, bool is_const = false);
 		inline void push() { scopes.emplace_back(static_cast<ssize_t>(scopes.size())); }
 		inline void pop()  { scopes.pop_back(); }

@@ -3,17 +3,17 @@
 #include "JS.h"
 #include "Utils.h"
 
-Value * ScopeStack::lookup(const std::string &name, bool *const_out, ssize_t *depth_out) {
+Value ** ScopeStack::lookup(const std::string &name, bool *const_out, ssize_t *depth_out) {
 	ssize_t depth = scopes.size();
-	for (const Scope &scope: reverse(scopes)) {
+	for (Scope &scope: reverse(scopes)) {
 		--depth;
-		if (scope.store.contains(name)) {
+		if (auto iter = scope.store.find(name); iter != scope.store.end()) {
 			if (depth_out != nullptr)
 				*depth_out = depth;
-			auto [value, is_const] = scope.store.at(name);
+			auto &[value, is_const] = iter->second;
 			if (const_out != nullptr)
 				*const_out = is_const;
-			return value;
+			return &value;
 		}
 	}
 
@@ -26,7 +26,7 @@ Value * ScopeStack::lookup(const std::string &name, bool *const_out, ssize_t *de
 void ScopeStack::insert(const std::string &name, Value *value, bool is_const) {
 	if (scopes.empty())
 		throw std::runtime_error("Cannot insert into ScopeStack: no scopes present");
-	
+
 	scopes.back().store.try_emplace(name, value, is_const);
 }
 

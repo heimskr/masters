@@ -139,4 +139,5 @@ class String: public Value {
 		std::string getName() const override { return "String"; }
 		operator bool() const override { return !string.empty(); }
 		VALUE_OPERATOR_OVERRIDES
+		// TODO: operator+
 };

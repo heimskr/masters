@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 class Context;
@@ -17,7 +18,7 @@ class Node {
 	public:
 		enum class Type {
 			Invalid = 0, Program, BlockStatement, Identifier, VariableDeclarator, VariableDeclaration,
-			ExpressionStatement, BinaryExpression,
+			ExpressionStatement, BinaryExpression, ArrayExpression, Literal, AssignmentExpression,
 		};
 
 		int start = -1;
@@ -57,7 +58,6 @@ class ProgramNode: public Node {
 		std::vector<std::unique_ptr<Node>> body;
 
 		ProgramNode(const nlohmann::json &);
-		~ProgramNode() override = default;
 
 		Type getType() const override { return Type::Program; }
 		std::pair<Result, Value *> interpret(Context &) override;
@@ -68,7 +68,6 @@ class BlockStatementNode: public Node {
 		std::vector<std::unique_ptr<Node>> body;
 
 		BlockStatementNode(const nlohmann::json &);
-		~BlockStatementNode() override = default;
 
 		Type getType() const override { return Type::BlockStatement; }
 		std::pair<Result, Value *> interpret(Context &) override;
@@ -79,7 +78,6 @@ class IdentifierNode: public Node {
 		std::string name;
 
 		IdentifierNode(const nlohmann::json &);
-		~IdentifierNode() override = default;
 
 		Type getType() const override { return Type::Identifier; }
 };
@@ -90,7 +88,6 @@ class VariableDeclaratorNode: public Node {
 		std::unique_ptr<Node> init;
 
 		VariableDeclaratorNode(const nlohmann::json &);
-		~VariableDeclaratorNode() = default;
 
 		Type getType() const override { return Type::VariableDeclarator; }
 };
@@ -101,7 +98,6 @@ class VariableDeclarationNode: public Node {
 		std::vector<std::unique_ptr<VariableDeclaratorNode>> declarators;
 
 		VariableDeclarationNode(const nlohmann::json &);
-		~VariableDeclarationNode() = default;
 
 		Type getType() const override { return Type::VariableDeclaration; }
 		std::pair<Result, Value *> interpret(Context &) override;
@@ -115,7 +111,6 @@ class ExpressionStatementNode: public Node {
 		std::unique_ptr<Node> expression;
 
 		ExpressionStatementNode(const nlohmann::json &);
-		~ExpressionStatementNode() = default;
 
 		Type getType() const override { return Type::ExpressionStatement; }
 		std::pair<Result, Value *> interpret(Context &) override;
@@ -128,7 +123,6 @@ class IfStatementNode: public Node {
 		std::unique_ptr<Node> alternate;
 
 		IfStatementNode(const nlohmann::json &);
-		~IfStatementNode() = default;
 
 		Type getType() const override { return Type::ExpressionStatement; }
 		std::pair<Result, Value *> interpret(Context &) override;
@@ -141,7 +135,6 @@ class BinaryExpressionNode: public Node {
 		std::string op;
 
 		BinaryExpressionNode(const nlohmann::json &);
-		~BinaryExpressionNode() = default;
 
 		Type getType() const override { return Type::BinaryExpression; }
 		Value * evaluate(Context &) override;
@@ -152,8 +145,30 @@ class ArrayExpressionNode: public Node {
 		std::vector<std::unique_ptr<Node>> elements;
 
 		ArrayExpressionNode(const nlohmann::json &);
-		~ArrayExpressionNode() = default;
 
-		Type getType() const override { return Type::BinaryExpression; }
+		Type getType() const override { return Type::ArrayExpression; }
 		Value * evaluate(Context &) override;
+};
+
+class LiteralNode: public Node {
+	public:
+		std::variant<std::string, double> value;
+
+		LiteralNode(const nlohmann::json &);
+
+		Type getType() const override { return Type::Literal; }
+		Value * evaluate(Context &) override;
+};
+
+class AssignmentExpressionNode: public Node {
+	public:
+		std::unique_ptr<Node> left;
+		std::unique_ptr<Node> right;
+		std::string op;
+
+		AssignmentExpressionNode(const nlohmann::json &);
+
+		Type getType() const override { return Type::AssignmentExpression; }
+		Value * evaluate(Context &) override;
+		Value ** access(Context &);
 };
