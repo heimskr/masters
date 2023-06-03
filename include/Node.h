@@ -146,3 +146,14 @@ class BinaryExpressionNode: public Node {
 		Type getType() const override { return Type::BinaryExpression; }
 		Value * evaluate(Context &) override;
 };
+
+class ArrayExpressionNode: public Node {
+	public:
+		std::vector<std::unique_ptr<Node>> elements;
+
+		ArrayExpressionNode(const nlohmann::json &);
+		~ArrayExpressionNode() = default;
+
+		Type getType() const override { return Type::BinaryExpression; }
+		Value * evaluate(Context &) override;
+};

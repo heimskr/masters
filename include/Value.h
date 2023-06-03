@@ -90,7 +90,7 @@ class Object: public Value {
 class Array: public Value {
 	public:
 		std::vector<Value *> values;
-		std::map<std::string, Value *> map;
+		// std::map<std::string, Value *> map;
 		Array() = default;
 		ValueType getType() const override { return ValueType::Array; }
 		std::vector<Value *> getReferents() const override { return values; }

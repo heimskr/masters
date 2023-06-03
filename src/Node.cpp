@@ -1,5 +1,8 @@
+#include <iostream>
+
 #include "JS.h"
 #include "Node.h"
+#include "Value.h"
 
 void Node::assertType(Type type) {
 	if (getType() != type)
@@ -25,16 +28,16 @@ std::unique_ptr<Node> Node::fromJSON(const nlohmann::json &json) {
 
 	if (type == "Program")
 		return std::make_unique<ProgramNode>(json);
-	
+
 	if (type == "BlockStatement")
 		return std::make_unique<BlockStatementNode>(json);
-	
+
 	if (type == "Identifier")
 		return std::make_unique<IdentifierNode>(json);
-	
+
 	if (type == "VariableDeclarator")
 		return std::make_unique<VariableDeclaratorNode>(json);
-	
+
 	if (type == "VariableDeclaration")
 		return std::make_unique<VariableDeclarationNode>(json);
 
@@ -47,6 +50,10 @@ std::unique_ptr<Node> Node::fromJSON(const nlohmann::json &json) {
 	if (type == "BinaryExpression")
 		return std::make_unique<BinaryExpressionNode>(json);
 
+	if (type == "ArrayExpression")
+		return std::make_unique<ArrayExpressionNode>(json);
+
+	std::cerr << json.dump() << std::endl;
 	throw std::invalid_argument("Node::fromJSON failed: type \"" + type + "\" not handled");
 }
 
@@ -204,5 +211,19 @@ Value * BinaryExpressionNode::evaluate(Context &context) {
 		throw std::invalid_argument("Unrecognized binary operator: \"" + op + '"');
 
 	out->context = &context;
+	return out;
+}
+
+ArrayExpressionNode::ArrayExpressionNode(const nlohmann::json &json) {
+	for (const auto &element: json.at("elements").items())
+		elements.push_back(Node::fromJSON(element.value()));
+}
+
+Value * ArrayExpressionNode::evaluate(Context &context) {
+	auto *out = context.makeValue<Array>();
+
+	for (const auto &element: elements)
+		out->values.emplace_back(element->evaluate(context));
+
 	return out;
 }
