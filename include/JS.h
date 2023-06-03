@@ -45,6 +45,8 @@ class Context {
 	public:
 		std::unordered_set<Value *> valuePool;
 		ScopeStack stack;
+		size_t lineNumber = 0;
+		size_t columnNumber = 0;
 
 		Context() = default;
 

@@ -1,4 +1,5 @@
 #include <sstream>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "Process.h"
@@ -24,11 +25,11 @@ extern char **environ;
 // Credit for execvpe_hack: https://stackoverflow.com/a/7789795/227663
 int execvpe_hack(const char *program, char **argv, char **envp) {
 	char **saved = environ;
-    int result;
-    environ = envp;
-    result = execvp(program, argv);
-    environ = saved;
-    return result;
+	int result;
+	environ = envp;
+	result = execvp(program, argv);
+	environ = saved;
+	return result;
 }
 
 Process::Process(const char **argv, bool with_path, const char **environment):

@@ -1,6 +1,9 @@
 #pragma once
 
-// Credit: https://stackoverflow.com/a/28139075/227663
+#include <cstdint>
+#include <string>
+
+// Credit for reverse: https://stackoverflow.com/a/28139075/227663
 
 template <typename T>
 struct reverse {
@@ -18,3 +21,7 @@ template <typename T>
 auto end(reverse<T> r) {
 	return std::rend(r.iterable);
 }
+
+int64_t  parseLong(std::string_view, int base = 10);
+uint64_t parseUlong(std::string_view, int base = 10);
+double   parseDouble(std::string_view);
