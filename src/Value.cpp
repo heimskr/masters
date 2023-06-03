@@ -159,3 +159,39 @@ Value * Null::operator==(const Value &right) const {
 
 	return make<Boolean>(*this, false);
 }
+
+Value * Undefined::operator==(const Value &right) const {
+	if (const auto *undefined = dynamic_cast<const Undefined *>(&right))
+		return make<Boolean>(*this, true);
+
+	return make<Boolean>(*this, false);
+}
+
+Value * Number::operator==(const Value &right) const {
+	if (const auto *other_number = dynamic_cast<const Number *>(&right))
+		return make<Boolean>(*this, number == other_number->number);
+
+	return make<Boolean>(*this, false);
+}
+
+Value * Boolean::operator==(const Value &right) const {
+	if (const auto *other_boolean = dynamic_cast<const Boolean *>(&right))
+		return make<Boolean>(*this, boolean == other_boolean->boolean);
+
+	return make<Boolean>(*this, false);
+}
+
+Value * String::operator==(const Value &right) const {
+	if (const auto *other_string = dynamic_cast<const String *>(&right))
+		return make<Boolean>(*this, string == other_string->string);
+
+	return make<Boolean>(*this, false);
+}
+
+Value * Object::operator==(const Value &right) const {
+	return make<Boolean>(*this, this == &right);
+}
+
+Value * Array::operator==(const Value &right) const {
+	return make<Boolean>(*this, this == &right);
+}
