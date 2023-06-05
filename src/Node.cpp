@@ -269,13 +269,55 @@ AssignmentExpressionNode::AssignmentExpressionNode(const nlohmann::json &json):
 	left(Node::fromJSON(json.at("left"))), right(Node::fromJSON(json.at("right"))), op(json.at("operator")) {}
 
 Value * AssignmentExpressionNode::evaluate(Context &context) {
+	bool is_const = false;
+	Value **accessed = access(context, &is_const);
+	assert(accessed);
+	assert(*accessed);
+	if (is_const)
+		throw JSError("Can't assign to const variable");
 
+	Value *right_value = right->evaluate(context);
+
+	if (op == "=")
+		*accessed = right_value;
+	else if (op == "+=")
+		*accessed = **accessed + *right_value;
+	else if (op == "-=")
+		*accessed = **accessed - *right_value;
+	else if (op == "*=")
+		*accessed = **accessed * *right_value;
+	else if (op == "/=")
+		*accessed = **accessed / *right_value;
+	else if (op == "%=")
+		*accessed = **accessed % *right_value;
+	else if (op == "&=")
+		*accessed = **accessed & *right_value;
+	else if (op == "|=")
+		*accessed = **accessed | *right_value;
+	else if (op == "^=")
+		*accessed = **accessed ^ *right_value;
+	else if (op == "**=")
+		*accessed = (*accessed)->power(*right_value);
+	else if (op == "&&=")
+		*accessed = **accessed && *right_value;
+	else if (op == "||=")
+		*accessed = **accessed || *right_value;
+	else if (op == "<<=")
+		*accessed = **accessed << *right_value;
+	else if (op == ">>=")
+		*accessed = (*accessed)->shiftRightArithmetic(*right_value);
+	else if (op == ">>>=")
+		*accessed = (*accessed)->shiftRightLogical(*right_value);
+	else
+		throw std::logic_error("Unsupported assignment operator: \"" + op + '"');
+
+	return *accessed;
 }
 
-Value ** AssignmentExpressionNode::access(Context &context) {
+Value ** AssignmentExpressionNode::access(Context &context, bool *const_out) {
 	if (left->getType() == Node::Type::Identifier) {
 		auto *identifier = dynamic_cast<IdentifierNode *>(left.get());
-		return context.stack.lookup(identifier->name);
+		return context.stack.lookup(identifier->name, const_out);
 	}
 
 	throw std::logic_error("Assignment expression LHS type " + std::string(stringify(left->getType())) +

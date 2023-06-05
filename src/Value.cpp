@@ -153,6 +153,18 @@ Value * Value::operator>=(const Value &other) const {
 	return make<Boolean>(*this, static_cast<double>(*this) >= static_cast<double>(other));
 }
 
+Value * Value::operator<<(const Value &other) const {
+	return make<Number>(*this, static_cast<int64_t>(*this) << static_cast<int64_t>(other));
+}
+
+Value * Value::shiftRightLogical(const Value &other) const {
+	return make<Number>(*this, static_cast<uint64_t>(*this) >> static_cast<uint64_t>(other));
+}
+
+Value * Value::shiftRightArithmetic(const Value &other) const {
+	return make<Number>(*this, static_cast<int64_t>(*this) >> static_cast<int64_t>(other));
+}
+
 Value * Null::operator==(const Value &right) const {
 	if (const auto *null = dynamic_cast<const Null *>(&right))
 		return make<Boolean>(*this, true);
@@ -194,4 +206,104 @@ Value * Object::operator==(const Value &right) const {
 
 Value * Array::operator==(const Value &right) const {
 	return make<Boolean>(*this, this == &right);
+}
+
+Value * Reference::operator+(const Value &other) const {
+	assert(referent);
+	return *referent + other;
+}
+
+Value * Reference::operator-(const Value &other) const {
+	assert(referent);
+	return *referent - other;
+}
+
+Value * Reference::operator*(const Value &other) const {
+	assert(referent);
+	return *referent * other;
+}
+
+Value * Reference::operator/(const Value &other) const {
+	assert(referent);
+	return *referent / other;
+}
+
+Value * Reference::operator%(const Value &other) const {
+	assert(referent);
+	return *referent % other;
+}
+
+Value * Reference::operator&(const Value &other) const {
+	assert(referent);
+	return *referent & other;
+}
+
+Value * Reference::operator|(const Value &other) const {
+	assert(referent);
+	return *referent | other;
+}
+
+Value * Reference::operator^(const Value &other) const {
+	assert(referent);
+	return *referent ^ other;
+}
+
+Value * Reference::operator==(const Value &other) const {
+	assert(referent);
+	return *referent == other;
+}
+
+Value * Reference::operator!=(const Value &other) const {
+	assert(referent);
+	return *referent != other;
+}
+
+Value * Reference::operator<(const Value &other) const {
+	assert(referent);
+	return *referent < other;
+}
+
+Value * Reference::operator>(const Value &other) const {
+	assert(referent);
+	return *referent > other;
+}
+
+Value * Reference::operator<=(const Value &other) const {
+	assert(referent);
+	return *referent <= other;
+}
+
+Value * Reference::operator>=(const Value &other) const {
+	assert(referent);
+	return *referent >= other;
+}
+
+Value * Reference::power(const Value &other) const {
+	assert(referent);
+	return referent->power(other);
+}
+
+Value * Reference::operator&&(const Value &other) const {
+	assert(referent);
+	return *referent && other;
+}
+
+Value * Reference::operator||(const Value &other) const {
+	assert(referent);
+	return *referent || other;
+}
+
+Value * Reference::operator<<(const Value &other) const {
+	assert(referent);
+	return *referent << other;
+}
+
+Value * Reference::shiftRightLogical(const Value &other) const {
+	assert(referent);
+	return referent->shiftRightLogical(other);
+}
+
+Value * Reference::shiftRightArithmetic(const Value &other) const {
+	assert(referent);
+	return referent->shiftRightArithmetic(other);
 }

@@ -170,5 +170,5 @@ class AssignmentExpressionNode: public Node {
 
 		Type getType() const override { return Type::AssignmentExpression; }
 		Value * evaluate(Context &) override;
-		Value ** access(Context &);
+		Value ** access(Context &, bool *const_out = nullptr);
 };
