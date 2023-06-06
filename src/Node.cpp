@@ -162,6 +162,32 @@ std::pair<Result, Value *> IfStatement::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
+WhileLoop::WhileLoop(const ASTNode &node):
+	condition(Expression::create(*node.at(0))),
+	body(Statement::create(*node.at(1))) {}
+
+std::pair<Result, Value *> WhileLoop::interpret(Context &context) {
+	while (condition->evaluate(context)) {
+		const auto [result, value] = body->interpret(context);
+		if (result == Result::Continue)
+			continue;
+		if (result == Result::Break)
+			return {Result::None, value};
+		if (result == Result::Return)
+			return {Result::Return, value};
+	}
+
+	return {Result::None, nullptr};
+}
+
+std::pair<Result, Value *> Continue::interpret(Context &context) {
+	return {Result::Continue, nullptr};
+}
+
+std::pair<Result, Value *> Break::interpret(Context &context) {
+	return {Result::Break, nullptr};
+}
+
 std::pair<Result, Value *> Expression::interpret(Context &context) {
 	return {Result::None, evaluate(context)};
 }
@@ -184,6 +210,21 @@ Value * BinaryExpression::evaluate(Context &context) {
 
 		case Type::Subtraction:
 			return *left->evaluate(context) - *right->evaluate(context);
+
+		case Type::LessThan:
+			return *left->evaluate(context) < *right->evaluate(context);
+
+		case Type::LessThanOrEqual:
+			return *left->evaluate(context) <= *right->evaluate(context);
+
+		case Type::GreaterThan:
+			return *left->evaluate(context) > *right->evaluate(context);
+
+		case Type::GreaterThanOrEqual:
+			return *left->evaluate(context) >= *right->evaluate(context);
+
+		case Type::Modulo:
+			return *left->evaluate(context) % *right->evaluate(context);
 
 		default:
 			throw Unimplemented("Can't evaluate BinaryExpression with type " + std::to_string(static_cast<int>(type)) +
@@ -249,6 +290,11 @@ BinaryExpression::Type BinaryExpression::getType(int symbol) {
 		case JSTOK_NTEQ:  return Type::TripleNotEquals;
 		case JSTOK_PLUS:  return Type::Addition;
 		case JSTOK_MINUS: return Type::Subtraction;
+		case JSTOK_LT:    return Type::LessThan;
+		case JSTOK_LTE:   return Type::LessThanOrEqual;
+		case JSTOK_GT:    return Type::GreaterThan;
+		case JSTOK_GTE:   return Type::GreaterThanOrEqual;
+		case JSTOK_MOD:   return Type::Modulo;
 
 		default:
 			throw std::invalid_argument("Unknown symbol in BinaryExpression::getType: " +
@@ -264,10 +310,36 @@ Value * UnaryExpression::evaluate(Context &context) {
 	switch (type) {
 		case Type::Plus:
 			return subexpr->evaluate(context)->toNumber();
+
 		case Type::Negation: {
 			auto *number = subexpr->evaluate(context)->toNumber();
 			number->number = -number->number;
 			return number;
+		}
+
+		case Type::PrefixIncrement:
+		case Type::PrefixDecrement:
+		case Type::PostfixIncrement:
+		case Type::PostfixDecrement: {
+			auto *lvalue = dynamic_cast<LValueExpression *>(subexpr.get());
+			assert(lvalue != nullptr);
+			auto *subvalue = lvalue->evaluate(context);
+			assert(subvalue);
+			assert(lvalue->referenced);
+			if (subvalue->getType() != ValueType::Number)
+				return context.makeValue<Number>(nan(""));
+			auto *number = dynamic_cast<Number *>(subvalue);
+			double new_value = nan("");
+			switch (type) {
+				case Type::PrefixIncrement:  new_value = ++number->number; break;
+				case Type::PrefixDecrement:  new_value = --number->number; break;
+				case Type::PostfixIncrement: new_value = number->number++; break;
+				case Type::PostfixDecrement: new_value = number->number--; break;
+				default: std::terminate();
+			}
+			auto *out = context.makeValue<Number>(new_value);
+			*lvalue->referenced = number;
+			return out;
 		}
 
 		default:
@@ -278,8 +350,12 @@ Value * UnaryExpression::evaluate(Context &context) {
 
 UnaryExpression::Type UnaryExpression::getType(int symbol) {
 	switch (symbol) {
-		case JSTOK_PLUS:  return Type::Plus;
-		case JSTOK_MINUS: return Type::Negation;
+		case JSTOK_PLUS:       return Type::Plus;
+		case JSTOK_MINUS:      return Type::Negation;
+		case JSTOK_PLUSPLUS:   return Type::PrefixIncrement;
+		case JSTOK_MINUSMINUS: return Type::PrefixDecrement;
+		case JS_POSTPLUS:      return Type::PostfixIncrement;
+		case JS_POSTMINUS:     return Type::PostfixDecrement;
 		default:
 			throw std::invalid_argument("Unknown symbol in UnaryExpression::getType: " +
 				std::string(jsParser.getName(symbol)));
@@ -290,6 +366,11 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 	switch (node.symbol) {
 		case JSTOK_TEQ:
 		case JSTOK_NTEQ:
+		case JSTOK_LT:
+		case JSTOK_LTE:
+		case JSTOK_GT:
+		case JSTOK_GTE:
+		case JSTOK_MOD:
 			return std::make_unique<BinaryExpression>(node);
 
 		case JSTOK_PLUS:
@@ -297,6 +378,12 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 			if (node.size() == 1)
 				return std::make_unique<UnaryExpression>(node);
 			return std::make_unique<BinaryExpression>(node);
+
+		case JSTOK_PLUSPLUS:
+		case JS_POSTPLUS:
+		case JSTOK_MINUSMINUS:
+		case JS_POSTMINUS:
+			return std::make_unique<UnaryExpression>(node);
 
 		case JSTOK_IDENT:
 			return std::make_unique<Identifier>(node);
@@ -328,6 +415,12 @@ std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 			return std::make_unique<VariableDefinitions>(node);
 		case JSTOK_IF:
 			return std::make_unique<IfStatement>(node);
+		case JSTOK_WHILE:
+			return std::make_unique<WhileLoop>(node);
+		case JSTOK_CONTINUE:
+			return std::make_unique<Continue>();
+		case JSTOK_BREAK:
+			return std::make_unique<Break>();
 		case JS_BLOCK:
 			return std::make_unique<Block>(node);
 		case JSTOK_LPAREN:
@@ -345,7 +438,7 @@ Identifier::Identifier(const ASTNode &node): name(*node.text) {
 
 Value * Identifier::evaluate(Context &context) {
 	if (Value **result = context.stack.lookup(name))
-		return *result;
+		return *(referenced = result);
 
 	throw ReferenceError(name, location);
 }

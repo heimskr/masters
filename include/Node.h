@@ -20,7 +20,7 @@ DeclarationKind getKind(int symbol);
 
 enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
-	VariableDefinitions, FunctionCall,
+	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break,
 };
 
 class Node {
@@ -75,13 +75,28 @@ class Statement: public Node {
 };
 
 class Expression: public Statement {
-	protected:
-		Expression() = default;
-
 	public:
 		static std::unique_ptr<Expression> create(const ASTNode &);
 
 		std::pair<Result, Value *> interpret(Context &) override;
+
+	protected:
+		Expression() = default;
+};
+
+class LValueExpression: public Expression {
+	public:
+		Value **referenced = nullptr;
+
+	protected:
+		LValueExpression() = default;
+};
+
+class Identifier: public LValueExpression {
+	public:
+		std::string name;
+		Identifier(const ASTNode &);
+		Value * evaluate(Context &) override;
 };
 
 class BinaryExpression: public Expression {
@@ -180,13 +195,29 @@ class IfStatement: public Statement {
 		std::pair<Result, Value *> interpret(Context &) override;
 };
 
-class Identifier: public Expression {
+class WhileLoop: public Statement {
 	public:
-		std::string name;
+		std::unique_ptr<Expression> condition;
+		std::unique_ptr<Statement> body;
 
-		Identifier(const ASTNode &);
+		WhileLoop(const ASTNode &);
 
-		Value * evaluate(Context &) override;
+		NodeType getType() const override { return NodeType::WhileLoop; }
+		std::pair<Result, Value *> interpret(Context &) override;
+};
+
+class Continue: public Statement {
+	public:
+		Continue() = default;
+		NodeType getType() const override { return NodeType::Continue; }
+		std::pair<Result, Value *> interpret(Context &) override;
+};
+
+class Break: public Statement {
+	public:
+		Break() = default;
+		NodeType getType() const override { return NodeType::Break; }
+		std::pair<Result, Value *> interpret(Context &) override;
 };
 
 struct NumberLiteral: public Expression {

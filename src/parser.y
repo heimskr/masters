@@ -126,7 +126,7 @@ using AN = ASTNode;
 %left "|"
 %left "^"
 %left "&"
-%left "==" "!="
+%left "===" "!=="
 %left "<" "<=" ">" ">=" "in" "instanceof"
 %left "<<" ">>" ">>>"
 %left "+" "-"
@@ -152,6 +152,7 @@ statement: block
          | while_loop
          | conditional
          | full_var_def
+         | function
          | expr       ";" { D($2); }
          | "return"   ";" { D($2); }
          | "break"    ";" { D($2); }
@@ -241,6 +242,7 @@ expr: expr "&&"   expr { $$ = $2->adopt({$1, $3}); }
     | boolean
     | string
     | number
+    | function
     | "new" expr "(" exprlist_ ")" %prec NEW_ARGS { $$ = $1->adopt({$2, $4}); D($3, $5); }
     | "new" expr %prec NEW_NO_ARGS { $$ = $1->adopt($2); }
 	| "delete" expr { $$ = $1->adopt($2); }
