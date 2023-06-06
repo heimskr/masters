@@ -238,6 +238,12 @@ Value * BinaryExpression::evaluate(Context &context) {
 		case Type::Multiplication:
 			return *left->evaluate(context) * *right->evaluate(context);
 
+		case Type::Division:
+			return *left->evaluate(context) / *right->evaluate(context);
+
+		case Type::Exponentiation:
+			return left->evaluate(context)->power(*right->evaluate(context));
+
 		default:
 			throw Unimplemented("Can't evaluate BinaryExpression with type " + std::to_string(static_cast<int>(type)) +
 				": unimplemented");
@@ -308,6 +314,8 @@ BinaryExpression::Type BinaryExpression::getType(int symbol) {
 		case JSTOK_GTE:   return Type::GreaterThanOrEqual;
 		case JSTOK_MOD:   return Type::Modulo;
 		case JSTOK_TIMES: return Type::Multiplication;
+		case JSTOK_DIV:   return Type::Division;
+		case JSTOK_EXP:   return Type::Exponentiation;
 
 		default:
 			throw std::invalid_argument("Unknown symbol in BinaryExpression::getType: " +
@@ -389,6 +397,8 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_GTE:
 		case JSTOK_MOD:
 		case JSTOK_TIMES:
+		case JSTOK_DIV:
+		case JSTOK_EXP:
 			return std::make_unique<BinaryExpression>(node);
 
 		case JSTOK_PLUS:

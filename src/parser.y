@@ -232,8 +232,8 @@ expr: expr "&&"   expr { $$ = $2->adopt({$1, $3}); }
     | "!" expr { $$ = $1->adopt($2); }
     | "~" expr { $$ = $1->adopt($2); }
     | expr "?" expr ":" expr %prec "?" { $$ = $2->adopt({$1, $3, $5}); D($4); }
-    | "+" number %prec UNARY   { $$ = $1->adopt($2); }
-    | "-" number %prec UNARY   { $$ = $1->adopt($2); }
+    | "+" expr   %prec UNARY   { $$ = $1->adopt($2); }
+    | "-" expr   %prec UNARY   { $$ = $1->adopt($2); }
     | "++" expr  %prec PREFIX  { $$ = $1->adopt($2); }
     | expr "++"  %prec POSTFIX { $$ = $2->adopt($1); $$->symbol = JS_POSTPLUS; }
     | "--" expr  %prec PREFIX  { $$ = $1->adopt($2); }

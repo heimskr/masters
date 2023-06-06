@@ -1,6 +1,7 @@
 #include <cmath>
 #include <sstream>
 
+#include "Errors.h"
 #include "JS.h"
 #include "Utils.h"
 #include "Value.h"
@@ -81,6 +82,17 @@ String::operator double() const {
 
 Number * String::toNumber() const {
 	return make<Number>(*this, static_cast<double>(*this));
+}
+
+Value * String::operator+(const Value &other) const {
+	switch (other.getType()) {
+		case ValueType::String:
+			return make<String>(*this, string + dynamic_cast<const String &>(other).string);
+		case ValueType::Number:
+			return make<String>(*this, string + std::to_string(dynamic_cast<const Number &>(other).number));
+		default:
+			throw TypeError("Invalid string concatenation");
+	}
 }
 
 Value * Value::operator+(const Value &other) const {

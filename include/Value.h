@@ -150,7 +150,7 @@ class String: public Value {
 		explicit operator double() const override;
 		explicit operator bool() const override { return !string.empty(); }
 		VALUE_OPERATOR_OVERRIDES
-		// TODO: operator+
+		Value * operator+(const Value &) const override;
 };
 
 class Reference: public Value {
