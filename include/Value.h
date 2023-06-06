@@ -102,6 +102,7 @@ class Array: public Value {
 		std::vector<Value *> values;
 		// std::map<std::string, Value *> map;
 		Array() = default;
+		Array(std::vector<Value *> values_): values(std::move(values_)) {}
 		ValueType getType() const override { return ValueType::Array; }
 		std::vector<Value *> getReferents() const override { return values; }
 		Number * toNumber() const override;

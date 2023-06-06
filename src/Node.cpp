@@ -188,6 +188,15 @@ std::pair<Result, Value *> Break::interpret(Context &context) {
 	return {Result::Break, nullptr};
 }
 
+Return::Return(const ASTNode &node):
+	returnValue(node.empty()? nullptr : Expression::create(*node.front())) {}
+
+std::pair<Result, Value *> Return::interpret(Context &context) {
+	if (returnValue)
+		return {Result::Return, returnValue->evaluate(context)};
+	return {Result::Return, context.makeValue<Undefined>()};
+}
+
 std::pair<Result, Value *> Expression::interpret(Context &context) {
 	return {Result::None, evaluate(context)};
 }
@@ -225,6 +234,9 @@ Value * BinaryExpression::evaluate(Context &context) {
 
 		case Type::Modulo:
 			return *left->evaluate(context) % *right->evaluate(context);
+
+		case Type::Multiplication:
+			return *left->evaluate(context) * *right->evaluate(context);
 
 		default:
 			throw Unimplemented("Can't evaluate BinaryExpression with type " + std::to_string(static_cast<int>(type)) +
@@ -295,6 +307,7 @@ BinaryExpression::Type BinaryExpression::getType(int symbol) {
 		case JSTOK_GT:    return Type::GreaterThan;
 		case JSTOK_GTE:   return Type::GreaterThanOrEqual;
 		case JSTOK_MOD:   return Type::Modulo;
+		case JSTOK_TIMES: return Type::Multiplication;
 
 		default:
 			throw std::invalid_argument("Unknown symbol in BinaryExpression::getType: " +
@@ -310,6 +323,9 @@ Value * UnaryExpression::evaluate(Context &context) {
 	switch (type) {
 		case Type::Plus:
 			return subexpr->evaluate(context)->toNumber();
+
+		case Type::LogicalNot:
+			return context.makeValue<Boolean>(!*subexpr->evaluate(context));
 
 		case Type::Negation: {
 			auto *number = subexpr->evaluate(context)->toNumber();
@@ -356,6 +372,7 @@ UnaryExpression::Type UnaryExpression::getType(int symbol) {
 		case JSTOK_MINUSMINUS: return Type::PrefixDecrement;
 		case JS_POSTPLUS:      return Type::PostfixIncrement;
 		case JS_POSTMINUS:     return Type::PostfixDecrement;
+		case JSTOK_NOT:        return Type::LogicalNot;
 		default:
 			throw std::invalid_argument("Unknown symbol in UnaryExpression::getType: " +
 				std::string(jsParser.getName(symbol)));
@@ -371,6 +388,7 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_GT:
 		case JSTOK_GTE:
 		case JSTOK_MOD:
+		case JSTOK_TIMES:
 			return std::make_unique<BinaryExpression>(node);
 
 		case JSTOK_PLUS:
@@ -383,6 +401,7 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JS_POSTPLUS:
 		case JSTOK_MINUSMINUS:
 		case JS_POSTMINUS:
+		case JSTOK_NOT:
 			return std::make_unique<UnaryExpression>(node);
 
 		case JSTOK_IDENT:
@@ -400,6 +419,9 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_TRUE:
 		case JSTOK_FALSE:
 			return std::make_unique<BooleanLiteral>(node);
+
+		case JSTOK_FUNCTION:
+			return std::make_unique<FunctionExpression>(node);
 
 		default:
 			node.debug();
@@ -421,9 +443,12 @@ std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 			return std::make_unique<Continue>();
 		case JSTOK_BREAK:
 			return std::make_unique<Break>();
+		case JSTOK_RETURN:
+			return std::make_unique<Return>(node);
 		case JS_BLOCK:
 			return std::make_unique<Block>(node);
 		case JSTOK_LPAREN:
+		case JSTOK_FUNCTION:
 			return Expression::create(node);
 		default:
 			node.debug();
@@ -490,4 +515,41 @@ Value * FunctionCall::evaluate(Context &context) {
 		argument_values.emplace_back(argument->evaluate(context));
 
 	return cast_function.function(context, argument_values);
+}
+
+FunctionExpression::FunctionExpression(const ASTNode &node):
+name(2 < node.size()? *node.at(2)->text : ""),
+body(std::make_unique<Block>(*node.at(1))) {
+	for (const auto *subnode: *node.front())
+		arguments.push_back(std::make_unique<Identifier>(*subnode));
+}
+
+Value * FunctionExpression::evaluate(Context &context) {
+	Value **this_obj = context.stack.lookup("this");
+
+	return context.makeValue<Function>([this](Context &context, const std::vector<Value *> &argument_values) -> Value * {
+		context.stack.push();
+
+		size_t i = 0;
+
+		for (; i < std::min(arguments.size(), argument_values.size()); ++i)
+			context.stack.insert(arguments.at(i)->name, argument_values.at(i));
+
+		for (; i < arguments.size(); ++i)
+			context.stack.insert(arguments.at(i)->name, context.makeValue<Undefined>());
+
+		context.stack.insert("arguments", context.makeValue<Array>(argument_values));
+
+		const auto [result, value] = body->interpret(context);
+
+		context.stack.pop();
+
+		return value;
+	}, this_obj? *this_obj : nullptr);
+}
+
+std::pair<Result, Value *> FunctionExpression::interpret(Context &context) {
+	if (!name.empty())
+		context.stack.insert(name, evaluate(context));
+	return {Result::None, evaluate(context)};
 }

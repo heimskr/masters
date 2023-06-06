@@ -20,7 +20,7 @@ DeclarationKind getKind(int symbol);
 
 enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
-	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break,
+	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return,
 };
 
 class Node {
@@ -162,6 +162,19 @@ class Block: public Statement {
 		std::pair<Result, Value *> interpret(Context &) override;
 };
 
+class FunctionExpression: public Expression {
+	public:
+		std::string name;
+		std::vector<std::unique_ptr<Identifier>> arguments;
+		std::unique_ptr<Block> body;
+
+		FunctionExpression(const ASTNode &);
+
+		NodeType getType() const override { return NodeType::FunctionExpression; }
+		Value * evaluate(Context &) override;
+		std::pair<Result, Value *> interpret(Context &) override;
+};
+
 class VariableDefinition: public Node {
 	public:
 		std::string ident;
@@ -217,6 +230,14 @@ class Break: public Statement {
 	public:
 		Break() = default;
 		NodeType getType() const override { return NodeType::Break; }
+		std::pair<Result, Value *> interpret(Context &) override;
+};
+
+class Return: public Statement {
+	public:
+		std::unique_ptr<Expression> returnValue;
+		Return(const ASTNode &);
+		NodeType getType() const override { return NodeType::Return; }
 		std::pair<Result, Value *> interpret(Context &) override;
 };
 
