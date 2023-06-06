@@ -4,4 +4,4 @@ if (x === 42) {
 } else if (x === 40) {
 	print(40);
 } else
-	print(false);
+	print(false, x);

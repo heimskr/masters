@@ -29,6 +29,8 @@ class ScopeStack {
 		std::vector<Scope> scopes;
 
 	public:
+		std::unordered_map<std::string, Value *> globals;
+
 		Value ** lookup(const std::string &name, bool *const_out = nullptr, ssize_t *depth_out = nullptr);
 		void insert(const std::string &name, Value *value, bool is_const = false);
 		inline void push() { scopes.emplace_back(static_cast<ssize_t>(scopes.size())); }
@@ -41,7 +43,6 @@ class ScopeStack {
 class Context {
 	public:
 		std::unordered_set<Value *> valuePool;
-		std::unordered_map<std::string, Value *> globals;
 		ScopeStack stack;
 		size_t lineNumber = 0;
 		size_t columnNumber = 0;
@@ -65,10 +66,20 @@ class Context {
 		}
 
 		inline void addGlobal(const std::string &name, Value *value) {
-			if (globals.contains(name))
+			if (stack.globals.contains(name))
 				throw std::runtime_error("Context already contains global \"" + name + '"');
 
-			globals.emplace(name, value);
+			stack.globals.emplace(name, value);
+			valuePool.insert(value);
+		}
+
+		template <typename T, typename... Args>
+		inline void makeGlobal(const std::string &name, Args &&...args) {
+			if (stack.globals.contains(name))
+				throw std::runtime_error("Context already contains global \"" + name + '"');
+
+			Value *value = makeValue<T>(std::forward<Args>(args)...);
+			stack.globals.try_emplace(name, value);
 			valuePool.insert(value);
 		}
 };

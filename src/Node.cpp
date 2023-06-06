@@ -75,6 +75,8 @@ Program::Program(const ASTNode &node) {
 }
 
 std::pair<Result, Value *> Program::interpret(Context &context) {
+	context.stack.push();
+
 	for (auto &node: body) {
 		const auto [result, value] = node->interpret(context);
 
@@ -88,6 +90,7 @@ std::pair<Result, Value *> Program::interpret(Context &context) {
 			throw JSError("Invalid continue statement", node->location);
 	}
 
+	context.stack.pop();
 	return {Result::None, nullptr};
 }
 
@@ -114,8 +117,8 @@ std::pair<Result, Value *> Block::interpret(Context &context) {
 }
 
 VariableDefinition::VariableDefinition(const ASTNode &node):
-	ident(*node.at(0)->text),
-	value(1 < node.size()? Expression::create(*node.at(1)) : nullptr) {}
+	ident(*node.text),
+	value(node.empty()? nullptr : Expression::create(*node.front())) {}
 
 std::pair<Result, Value *> VariableDefinition::interpret(Context &context) {
 	throw std::logic_error("Unimplemented");
@@ -130,28 +133,21 @@ VariableDefinitions::VariableDefinitions(const ASTNode &node): kind(getKind(node
 
 std::pair<Result, Value *> VariableDefinitions::interpret(Context &context) {
 	for (const auto &definition: definitions) {
-		// const std::string &name = dynamic_cast<IdentifierNode &>(*declarator->id).name;
-		// const bool must_be_unique = kind == DeclarationKind::Let || kind == DeclarationKind::Const;
+		const auto &name = definition->ident;
+		const bool must_be_unique = kind == DeclarationKind::Let || kind == DeclarationKind::Const;
 
-		// if (must_be_unique && context.stack.inLastScope(name))
-		// 	throw std::runtime_error("Name \"" + name + "\" already exists in top scope");
+		if (must_be_unique && context.stack.inLastScope(name))
+			throw std::runtime_error("Name \"" + name + "\" already exists in deepest scope");
 
-		// if (declarator->init)
-		// 	context.stack.insert(name, declarator->init->evaluate(context));
-		// else
-		// 	context.stack.insert(name, context.makeValue<Undefined>());
+		if (definition->value) {
+			context.stack.insert(name, definition->value->evaluate(context));
+		} else {
+			context.stack.insert(name, context.makeValue<Undefined>());
+		}
 	}
 
 	return {Result::None, nullptr};
 }
-
-// ExpressionStatement::ExpressionStatement(const ASTNode &node):
-// 	expression(Node::fromJSON(json.at("expression"))) {}
-
-// std::pair<Result, Value *> ExpressionStatement::interpret(Context &context) {
-// 	expression->evaluate(context);
-// 	return {Result::None, nullptr};
-// }
 
 IfStatement::IfStatement(const ASTNode &node):
 	condition(Expression::create(*node.at(0))),
@@ -251,6 +247,10 @@ std::pair<Result, Value *> IfStatement::interpret(Context &context) {
 // 	throw std::runtime_error("LiteralNode value has an invalid type");
 // }
 
+std::pair<Result, Value *> Expression::interpret(Context &context) {
+	return {Result::None, evaluate(context)};
+}
+
 BinaryExpression::BinaryExpression(const ASTNode &node):
 	type(getType(node.symbol)),
 	left(Expression::create(*node.at(0))),
@@ -263,6 +263,12 @@ Value * BinaryExpression::evaluate(Context &context) {
 
 		case Type::TripleNotEquals:
 			return *left->evaluate(context) != *right->evaluate(context);
+
+		case Type::Addition:
+			return *left->evaluate(context) + *right->evaluate(context);
+
+		case Type::Subtraction:
+			return *left->evaluate(context) - *right->evaluate(context);
 
 		default:
 			throw Unimplemented("Can't evaluate BinaryExpression with type " + std::to_string(static_cast<int>(type)) +
@@ -340,11 +346,25 @@ UnaryExpression::UnaryExpression(const ASTNode &node):
 	subexpr(Expression::create(*node.front())) {}
 
 Value * UnaryExpression::evaluate(Context &context) {
-	throw Unimplemented();
+	switch (type) {
+		case Type::Plus:
+			return subexpr->evaluate(context)->toNumber();
+		case Type::Negation: {
+			auto *number = subexpr->evaluate(context)->toNumber();
+			number->number = -number->number;
+			return number;
+		}
+
+		default:
+			throw Unimplemented("Can't evaluate UnaryExpression with type " + std::to_string(static_cast<int>(type)) +
+				": unimplemented");
+	}
 }
 
 UnaryExpression::Type UnaryExpression::getType(int symbol) {
 	switch (symbol) {
+		case JSTOK_PLUS:  return Type::Plus;
+		case JSTOK_MINUS: return Type::Negation;
 		default:
 			throw std::invalid_argument("Unknown symbol in UnaryExpression::getType: " +
 				std::string(jsParser.getName(symbol)));

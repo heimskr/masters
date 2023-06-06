@@ -188,9 +188,10 @@ class Reference: public Value {
 
 class Function: public Value {
 	public:
-		std::function<Value *(Context &, const std::vector<Value *> &arguments)> function;
+		using FunctionType = std::function<Value *(Context &, const std::vector<Value *> &arguments)>;
+		FunctionType function;
 		Value *thisObj = nullptr;
-		Function(decltype(function) function_ = {}, Value *this_obj = nullptr);
+		Function(FunctionType function_ = {}, Value *this_obj = nullptr);
 		std::vector<Value *> getReferents() const override { if (thisObj != nullptr) return {thisObj}; return {}; }
 		ValueType getType() const override { return ValueType::Function; }
 		Number * toNumber() const override;

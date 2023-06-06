@@ -17,6 +17,14 @@ Value ** ScopeStack::lookup(const std::string &name, bool *const_out, ssize_t *d
 		}
 	}
 
+	if (auto iter = globals.find(name); iter != globals.end()) {
+		if (depth_out != nullptr)
+			*depth_out = 0;
+		if (const_out != nullptr)
+			*const_out = false;
+		return &iter->second;
+	}
+
 	if (depth_out != nullptr)
 		*depth_out = -1;
 

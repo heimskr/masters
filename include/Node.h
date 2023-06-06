@@ -80,6 +80,8 @@ class Expression: public Statement {
 
 	public:
 		static std::unique_ptr<Expression> create(const ASTNode &);
+
+		std::pair<Result, Value *> interpret(Context &) override;
 };
 
 class BinaryExpression: public Expression {

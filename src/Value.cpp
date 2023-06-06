@@ -308,7 +308,7 @@ Value * Reference::shiftRightArithmetic(const Value &other) const {
 	return referent->shiftRightArithmetic(other);
 }
 
-Function::Function(decltype(function) function_, Value *this_obj):
+Function::Function(FunctionType function_, Value *this_obj):
 	function(std::move(function_)),
 	thisObj(this_obj) {}
 
