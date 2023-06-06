@@ -16,6 +16,9 @@ struct JSException: std::runtime_error {
 		std::runtime_error(std::move(message)),
 		line(line_),
 		column(column_) {}
+
+	JSException(std::string message, const ASTLocation &location):
+		JSException(std::move(message), location.line, location.column) {}
 };
 
 struct GenericError: std::runtime_error {

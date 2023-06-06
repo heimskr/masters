@@ -17,12 +17,12 @@ int main(int, char **) {
 	jsParser.debug(false, false);
 	jsParser.parse();
 
-	auto program = Node::fromAST(parsed);
-	if (!program) {
-		std::cerr << "Program node is null!\n";
-		return 1;
+	if (jsParser.errorCount == 0) {
+		assert(jsParser.root != nullptr);
+		Program program(*jsParser.root);
+		Context context;
+		program.interpret(context);
 	}
 
-	Context context;
-	program->interpret(context);
+	jsParser.done();
 }

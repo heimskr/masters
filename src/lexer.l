@@ -40,6 +40,7 @@ JS_SHEBANG      ("#!"[^\n]*)
 
 "instanceof"    {RTOKEN(INSTANCEOF)}
 "undefined"     {RTOKEN(UNDEFINED)}
+"arguments"     {RTOKEN(ARGUMENTS)}
 "continue"      {RTOKEN(CONTINUE)}
 "Infinity"      {RTOKEN(INFINITY)}
 "function"      {RTOKEN(FUNCTION)}
@@ -59,6 +60,7 @@ JS_SHEBANG      ("#!"[^\n]*)
 "NaN"           {RTOKEN(NAN)}
 "new"           {RTOKEN(NEW)}
 "let"           {RTOKEN(LET)}
+"var"           {RTOKEN(VAR)}
 ">>="           {RTOKEN(SRAEQ)}
 "<<="           {RTOKEN(SLEQ)}
 ">>>"           {RTOKEN(RSHIFTL)}

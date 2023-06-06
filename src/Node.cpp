@@ -1,112 +1,107 @@
+#include <cassert>
 #include <cmath>
 #include <iostream>
 
+#include "ASTNode.h"
+#include "Errors.h"
 #include "JS.h"
+#include "Lexer.h"
 #include "Node.h"
 #include "Value.h"
 
-void Node::assertType(Type type) {
-	if (getType() != type)
-		throw std::runtime_error("Assertion failed: " + std::string(typeid(*this).name()) + " at [" +
-			std::to_string(start) + " ... " + std::to_string(end) + "] is not an instance of " + stringify(type));
+std::unordered_set<BinaryExpression::Type> BinaryExpression::assignmentTypes {
+	BinaryExpression::Type::Assignment,
+	BinaryExpression::Type::AdditionAssignment,
+	BinaryExpression::Type::SubtractionAssignment,
+	BinaryExpression::Type::MultiplicationAssignment,
+	BinaryExpression::Type::ExponentiationAssignment,
+	BinaryExpression::Type::DivisionAssignment,
+	BinaryExpression::Type::ModuloAssignment,
+	BinaryExpression::Type::LeftShiftAssignment,
+	BinaryExpression::Type::RightShiftArithmeticAssignment,
+	BinaryExpression::Type::RightShiftLogicalAssignment,
+	BinaryExpression::Type::BitwiseAndAssignment,
+	BinaryExpression::Type::BitwiseOrAssignment,
+	BinaryExpression::Type::LogicalOrAssignment,
+	BinaryExpression::Type::LogicalAndAssignment,
+	BinaryExpression::Type::BitwiseXorAssignment,
+};
+
+DeclarationKind getKind(int symbol) {
+	switch (symbol) {
+		case JSTOK_CONST: return DeclarationKind::Const;
+		case JSTOK_LET:   return DeclarationKind::Let;
+		case JSTOK_VAR:   return DeclarationKind::Var;
+		default:
+			return DeclarationKind::Invalid;
+	}
 }
 
-const char * stringify(Node::Type type) {
+const char * stringify(NodeType type) {
 	switch (type) {
-		case Node::Type::Invalid: return "Invalid";
-		case Node::Type::Program: return "Program";
-		case Node::Type::BlockStatement: return "BlockStatement";
-		case Node::Type::Identifier: return "Identifier";
-		case Node::Type::VariableDeclarator: return "VariableDeclarator";
-		case Node::Type::VariableDeclaration: return "VariableDeclaration";
-		case Node::Type::ExpressionStatement: return "ExpressionStatement";
-		case Node::Type::BinaryExpression: return "BinaryExpression";
-		case Node::Type::ArrayExpression: return "ArrayExpression";
-		case Node::Type::Literal: return "Literal";
+		case NodeType::Invalid:             return "Invalid";
+		case NodeType::Program:             return "Program";
+		case NodeType::Block:               return "Block";
+		case NodeType::VariableDefinition:  return "VariableDefinition";
+		case NodeType::VariableDefinitions: return "VariableDefinitions";
+		case NodeType::IfStatement:         return "IfStatement";
+		case NodeType::BinaryExpression:    return "BinaryExpression";
+		case NodeType::UnaryExpression:     return "UnaryExpression";
 		default:
 			return "???";
 	}
 }
 
-std::unique_ptr<Node> Node::fromJSON(const nlohmann::json &json) {
-	std::string type;
-
-	try {
-		type = json.at("type");
-	} catch (...) {
-		std::cerr << "\e[31m" << json.dump() << "\e[39m\n";
-		throw;
-	}
-
-	if (type == "Program")
-		return std::make_unique<ProgramNode>(json);
-
-	if (type == "BlockStatement")
-		return std::make_unique<BlockStatementNode>(json);
-
-	if (type == "Identifier")
-		return std::make_unique<IdentifierNode>(json);
-
-	if (type == "VariableDeclarator")
-		return std::make_unique<VariableDeclaratorNode>(json);
-
-	if (type == "VariableDeclaration")
-		return std::make_unique<VariableDeclarationNode>(json);
-
-	if (type == "ExpressionStatement")
-		return std::make_unique<ExpressionStatementNode>(json);
-
-	if (type == "IfStatement")
-		return std::make_unique<IfStatementNode>(json);
-
-	if (type == "BinaryExpression")
-		return std::make_unique<BinaryExpressionNode>(json);
-
-	if (type == "ArrayExpression")
-		return std::make_unique<ArrayExpressionNode>(json);
-
-	if (type == "Literal")
-		return std::make_unique<LiteralNode>(json);
-
-	if (type == "AssignmentExpression")
-		return std::make_unique<AssignmentExpressionNode>(json);
-
-	std::cerr << "\e[31m" << json.dump() << "\e[39m\n";
-	throw std::invalid_argument("Node::fromJSON failed: type \"" + type + "\" not handled");
+void Node::assertType(NodeType type) {
+	if (getType() != type)
+		throw std::runtime_error("Assertion failed: " + std::string(typeid(*this).name()) + " at [" +
+			static_cast<std::string>(location) + "] is not an instance of " + stringify(type));
 }
 
-void Node::absorbPosition(const nlohmann::json &json) {
-	start = json.at("start");
-	end   = json.at("end");
+std::unique_ptr<Node> Node::fromAST(const ASTNode &node) {
+	throw std::invalid_argument("Node::fromAST failed: symbol \"" + std::string(node.getName()) + "\" not handled");
 }
 
-ProgramNode::ProgramNode(const nlohmann::json &json) {
-	absorbPosition(json);
-	for (const auto &subnode: json.at("body"))
-		body.emplace_back(Node::fromJSON(subnode));
+void Node::absorbPosition(const ASTNode &node) {
+	location = node.location;
 }
 
-std::pair<Result, Value *> ProgramNode::interpret(Context &context) {
+Program::Program(const ASTNode &node) {
+	absorbPosition(node);
+
+	for (const auto *subnode: node)
+		body.emplace_back(Statement::create(*subnode));
+}
+
+std::pair<Result, Value *> Program::interpret(Context &context) {
 	for (auto &node: body) {
-		auto [result, value] = node->interpret(context);
+		const auto [result, value] = node->interpret(context);
+
 		if (result == Result::Return)
 			return {result, value};
+
+		if (result == Result::Break)
+			throw JSException("Invalid break statement", node->location);
+
+		if (result == Result::Continue)
+			throw JSException("Invalid continue statement", node->location);
 	}
 
 	return {Result::None, nullptr};
 }
 
-BlockStatementNode::BlockStatementNode(const nlohmann::json &json) {
-	absorbPosition(json);
-	for (const auto &subnode: json.at("body"))
-		body.emplace_back(Node::fromJSON(subnode));
+Block::Block(const ASTNode &node) {
+	absorbPosition(node);
+
+	for (const auto *subnode: node)
+		body.emplace_back(Node::fromAST(*subnode));
 }
 
-std::pair<Result, Value *> BlockStatementNode::interpret(Context &context) {
+std::pair<Result, Value *> Block::interpret(Context &context) {
 	context.stack.push();
 
 	for (auto &node: body) {
-		auto [result, value] = node->interpret(context);
+		const auto [result, value] = node->interpret(context);
 		if (result != Result::None) {
 			context.stack.pop();
 			return {result, value};
@@ -117,159 +112,141 @@ std::pair<Result, Value *> BlockStatementNode::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
-IdentifierNode::IdentifierNode(const nlohmann::json &json): name(json.at("name")) {
-	absorbPosition(json);
+VariableDefinitions::VariableDefinitions(const ASTNode &node): kind(getKind(node.at(0)->symbol)) {
+	absorbPosition(node);
+
+	for (const auto *subnode: node)
+		definitions.push_back(std::make_unique<VariableDefinition>(*subnode));
 }
 
-VariableDeclaratorNode::VariableDeclaratorNode(const nlohmann::json &json):
-id(Node::fromJSON(json.at("id"))), init(json.at("init").is_null()? nullptr : Node::fromJSON(json.at("init"))) {
-	absorbPosition(json);
-}
+std::pair<Result, Value *> VariableDefinitions::interpret(Context &context) {
+	for (const auto &definition: definitions) {
+		// const std::string &name = dynamic_cast<IdentifierNode &>(*declarator->id).name;
+		// const bool must_be_unique = kind == DeclarationKind::Let || kind == DeclarationKind::Const;
 
-VariableDeclarationNode::VariableDeclarationNode(const nlohmann::json &json): kind(getKind(json.at("kind"))) {
-	absorbPosition(json);
-	for (const auto &subjson: json.at("declarations"))
-		declarators.push_back(std::make_unique<VariableDeclaratorNode>(subjson));
-}
+		// if (must_be_unique && context.stack.inLastScope(name))
+		// 	throw std::runtime_error("Name \"" + name + "\" already exists in top scope");
 
-std::pair<Result, Value *> VariableDeclarationNode::interpret(Context &context) {
-	for (const auto &declarator: declarators) {
-		declarator->id->assertType(Type::Identifier);
-
-		const std::string &name = dynamic_cast<IdentifierNode &>(*declarator->id).name;
-		const bool must_be_unique = kind == DeclarationKind::Let || kind == DeclarationKind::Const;
-
-		if (must_be_unique && context.stack.inLastScope(name))
-			throw std::runtime_error("Name \"" + name + "\" already exists in top scope");
-
-		if (declarator->init)
-			context.stack.insert(name, declarator->init->evaluate(context));
-		else
-			context.stack.insert(name, context.makeValue<Undefined>());
+		// if (declarator->init)
+		// 	context.stack.insert(name, declarator->init->evaluate(context));
+		// else
+		// 	context.stack.insert(name, context.makeValue<Undefined>());
 	}
 
 	return {Result::None, nullptr};
 }
 
-DeclarationKind VariableDeclarationNode::getKind(const std::string &string) {
-	if (string == "const")
-		return DeclarationKind::Const;
-	if (string == "let")
-		return DeclarationKind::Let;
-	if (string == "var")
-		return DeclarationKind::Var;
-	return DeclarationKind::Invalid;
-}
+// ExpressionStatement::ExpressionStatement(const ASTNode &node):
+// 	expression(Node::fromJSON(json.at("expression"))) {}
 
-ExpressionStatementNode::ExpressionStatementNode(const nlohmann::json &json):
-	expression(Node::fromJSON(json.at("expression"))) {}
+// std::pair<Result, Value *> ExpressionStatement::interpret(Context &context) {
+// 	expression->evaluate(context);
+// 	return {Result::None, nullptr};
+// }
 
-std::pair<Result, Value *> ExpressionStatementNode::interpret(Context &context) {
-	expression->evaluate(context);
-	return {Result::None, nullptr};
-}
+IfStatement::IfStatement(const ASTNode &node):
+	condition(Expression::create(*node.at(0))),
+	consequent(Statement::create(*node.at(1))),
+	alternate(2 < node.size()? Statement::create(*node.at(2)) : nullptr) {}
 
-IfStatementNode::IfStatementNode(const nlohmann::json &json):
-	test(Node::fromJSON(json.at("test"))), consequent(Node::fromJSON(json.at("consequent"))),
-	alternate(Node::fromJSON(json.at("alternate"))) {}
-
-std::pair<Result, Value *> IfStatementNode::interpret(Context &context) {
-	if (*test->evaluate(context))
+std::pair<Result, Value *> IfStatement::interpret(Context &context) {
+	if (*condition->evaluate(context))
 		return consequent->interpret(context);
 	if (alternate)
 		return alternate->interpret(context);
 	return {Result::None, nullptr};
 }
 
-BinaryExpressionNode::BinaryExpressionNode(const nlohmann::json &json):
-	left(Node::fromJSON(json.at("left"))), right(Node::fromJSON(json.at("right"))), op(json.at("alternate")) {}
+// BinaryExpressionNode::BinaryExpressionNode(const ASTNode &node):
+// 	left(Node::fromJSON(json.at("left"))), right(Node::fromJSON(json.at("right"))), op(json.at("alternate")) {}
 
-Value * BinaryExpressionNode::evaluate(Context &context) {
-	Value *out = nullptr;
+// Value * BinaryExpressionNode::evaluate(Context &context) {
+// 	Value *out = nullptr;
 
-	if (op == "+") {
-		out = *left->evaluate(context) + *right->evaluate(context);
-	} else if (op == "-") {
-		out = *left->evaluate(context) - *right->evaluate(context);
-	} else if (op == "*") {
-		out = *left->evaluate(context) * *right->evaluate(context);
-	} else if (op == "/") {
-		out = *left->evaluate(context) / *right->evaluate(context);
-	} else if (op == "%") {
-		out = *left->evaluate(context) % *right->evaluate(context);
-	} else if (op == "&") {
-		out = *left->evaluate(context) & *right->evaluate(context);
-	} else if (op == "|") {
-		out = *left->evaluate(context) | *right->evaluate(context);
-	} else if (op == "^") {
-		out = *left->evaluate(context) ^ *right->evaluate(context);
-	} else if (op == "==") {
-		out = *left->evaluate(context) == *right->evaluate(context);
-	} else if (op == "!=") {
-		out = *left->evaluate(context) != *right->evaluate(context);
-	} else if (op == "<") {
-		out = *left->evaluate(context) < *right->evaluate(context);
-	} else if (op == ">") {
-		out = *left->evaluate(context) > *right->evaluate(context);
-	} else if (op == "<=") {
-		out = *left->evaluate(context) <= *right->evaluate(context);
-	} else if (op == ">=") {
-		out = *left->evaluate(context) >= *right->evaluate(context);
-	} else if (op == "**") {
-		out = left->evaluate(context)->power(*right->evaluate(context));
-	} else if (op == "&&") {
-		Value *left_value = left->evaluate(context);
-		out = *left_value? right->evaluate(context) : left_value;
-	} else if (op == "||") {
-		Value *left_value = left->evaluate(context);
-		out = *left_value? left_value : right->evaluate(context);
-	}
+// 	if (op == "+") {
+// 		out = *left->evaluate(context) + *right->evaluate(context);
+// 	} else if (op == "-") {
+// 		out = *left->evaluate(context) - *right->evaluate(context);
+// 	} else if (op == "*") {
+// 		out = *left->evaluate(context) * *right->evaluate(context);
+// 	} else if (op == "/") {
+// 		out = *left->evaluate(context) / *right->evaluate(context);
+// 	} else if (op == "%") {
+// 		out = *left->evaluate(context) % *right->evaluate(context);
+// 	} else if (op == "&") {
+// 		out = *left->evaluate(context) & *right->evaluate(context);
+// 	} else if (op == "|") {
+// 		out = *left->evaluate(context) | *right->evaluate(context);
+// 	} else if (op == "^") {
+// 		out = *left->evaluate(context) ^ *right->evaluate(context);
+// 	} else if (op == "==") {
+// 		out = *left->evaluate(context) == *right->evaluate(context);
+// 	} else if (op == "!=") {
+// 		out = *left->evaluate(context) != *right->evaluate(context);
+// 	} else if (op == "<") {
+// 		out = *left->evaluate(context) < *right->evaluate(context);
+// 	} else if (op == ">") {
+// 		out = *left->evaluate(context) > *right->evaluate(context);
+// 	} else if (op == "<=") {
+// 		out = *left->evaluate(context) <= *right->evaluate(context);
+// 	} else if (op == ">=") {
+// 		out = *left->evaluate(context) >= *right->evaluate(context);
+// 	} else if (op == "**") {
+// 		out = left->evaluate(context)->power(*right->evaluate(context));
+// 	} else if (op == "&&") {
+// 		Value *left_value = left->evaluate(context);
+// 		out = *left_value? right->evaluate(context) : left_value;
+// 	} else if (op == "||") {
+// 		Value *left_value = left->evaluate(context);
+// 		out = *left_value? left_value : right->evaluate(context);
+// 	}
 
-	if (out == nullptr)
-		throw std::invalid_argument("Unrecognized binary operator: \"" + op + '"');
+// 	if (out == nullptr)
+// 		throw std::invalid_argument("Unrecognized binary operator: \"" + op + '"');
 
-	out->context = &context;
-	return out;
+// 	out->context = &context;
+// 	return out;
+// }
+
+// ArrayExpressionNode::ArrayExpressionNode(const ASTNode &node) {
+// 	for (const auto &element: json.at("elements").items())
+// 		elements.push_back(Node::fromJSON(element.value()));
+// }
+
+// Value * ArrayExpressionNode::evaluate(Context &context) {
+// 	auto *out = context.makeValue<Array>();
+
+// 	for (const auto &element: elements)
+// 		out->values.emplace_back(element->evaluate(context));
+
+// 	return out;
+// }
+
+// LiteralNode::LiteralNode(const ASTNode &node) {
+// 	const auto &value_json = json.at("value");
+// 	if (value_json.is_string())
+// 		value = value_json.get<std::string>();
+// 	else if (value_json.is_number())
+// 		value = value_json.get<double>();
+// 	else
+// 		throw std::runtime_error("Invalid literal value: " + value_json.dump());
+// }
+
+// Value * LiteralNode::evaluate(Context &context) {
+// 	if (std::holds_alternative<std::string>(value))
+// 		return context.makeValue<String>(std::get<std::string>(value));
+
+// 	if (std::holds_alternative<double>(value))
+// 		return context.makeValue<Number>(std::get<double>(value));
+
+// 	throw std::runtime_error("LiteralNode value has an invalid type");
+// }
+
+Value ** BinaryExpression::access(Context &context, bool *is_const) {
+	throw std::logic_error("Unimplemented");
 }
 
-ArrayExpressionNode::ArrayExpressionNode(const nlohmann::json &json) {
-	for (const auto &element: json.at("elements").items())
-		elements.push_back(Node::fromJSON(element.value()));
-}
-
-Value * ArrayExpressionNode::evaluate(Context &context) {
-	auto *out = context.makeValue<Array>();
-
-	for (const auto &element: elements)
-		out->values.emplace_back(element->evaluate(context));
-
-	return out;
-}
-
-LiteralNode::LiteralNode(const nlohmann::json &json) {
-	const auto &value_json = json.at("value");
-	if (value_json.is_string())
-		value = value_json.get<std::string>();
-	else if (value_json.is_number())
-		value = value_json.get<double>();
-	else
-		throw std::runtime_error("Invalid literal value: " + value_json.dump());
-}
-
-Value * LiteralNode::evaluate(Context &context) {
-	if (std::holds_alternative<std::string>(value))
-		return context.makeValue<String>(std::get<std::string>(value));
-
-	if (std::holds_alternative<double>(value))
-		return context.makeValue<Number>(std::get<double>(value));
-
-	throw std::runtime_error("LiteralNode value has an invalid type");
-}
-
-AssignmentExpressionNode::AssignmentExpressionNode(const nlohmann::json &json):
-	left(Node::fromJSON(json.at("left"))), right(Node::fromJSON(json.at("right"))), op(json.at("operator")) {}
-
-Value * AssignmentExpressionNode::evaluate(Context &context) {
+Value * BinaryExpression::evaluateAccess(Context &context) {
 	auto saver = context.writeMember();
 
 	bool is_const = false;
@@ -281,93 +258,48 @@ Value * AssignmentExpressionNode::evaluate(Context &context) {
 
 	Value *right_value = right->evaluate(context);
 
-	if (op == "=")
-		*accessed = right_value;
-	else if (op == "+=")
-		*accessed = **accessed + *right_value;
-	else if (op == "-=")
-		*accessed = **accessed - *right_value;
-	else if (op == "*=")
-		*accessed = **accessed * *right_value;
-	else if (op == "/=")
-		*accessed = **accessed / *right_value;
-	else if (op == "%=")
-		*accessed = **accessed % *right_value;
-	else if (op == "&=")
-		*accessed = **accessed & *right_value;
-	else if (op == "|=")
-		*accessed = **accessed | *right_value;
-	else if (op == "^=")
-		*accessed = **accessed ^ *right_value;
-	else if (op == "**=")
-		*accessed = (*accessed)->power(*right_value);
-	else if (op == "&&=")
-		*accessed = **accessed && *right_value;
-	else if (op == "||=")
-		*accessed = **accessed || *right_value;
-	else if (op == "<<=")
-		*accessed = **accessed << *right_value;
-	else if (op == ">>=")
-		*accessed = (*accessed)->shiftRightArithmetic(*right_value);
-	else if (op == ">>>=")
-		*accessed = (*accessed)->shiftRightLogical(*right_value);
-	else
-		throw std::logic_error("Unsupported assignment operator: \"" + op + '"');
-
-	return *accessed;
-}
-
-Value ** AssignmentExpressionNode::access(Context &context, bool *const_out) {
-	if (left->getType() == Node::Type::Identifier) {
-		auto *identifier = dynamic_cast<IdentifierNode *>(left.get());
-		return context.stack.lookup(identifier->name, const_out);
-	}
-
-	throw std::logic_error("Assignment expression LHS type " + std::string(stringify(left->getType())) +
-		" unsupported");
-}
-
-MemberExpressionNode::MemberExpressionNode(const nlohmann::json &json) {
-	if (auto iter = json.find("computed"); iter != json.end())
-		computed = *iter;
-
-	if (auto iter = json.find("optional"); iter != json.end())
-		optional = *iter;
-
-	object = Node::fromJSON(json.at("object"));
-	property = Node::fromJSON(json.at("property"));
-}
-
-Value * MemberExpressionNode::evaluate(Context &context) {
-	Value *evaluated_object = object->evaluate(context);
-	Value *evaluated_property = property->evaluate(context);
-
-	assert(evaluated_object);
-	assert(evaluated_property);
-
-	const auto initial_subscript = static_cast<double>(*evaluated_property);
-	const auto evaluated_type = evaluated_object->getType();
-
-	switch (evaluated_type) {
-		case ValueType::Array:
-		case ValueType::String:
-			if (std::isnan(initial_subscript) || std::isinf(initial_subscript))
-				return context.makeValue<Undefined>();
-			break;
+	switch (type) {
+		case Type::Assignment:
+			return *accessed = right_value;
+		case Type::AdditionAssignment:
+			return *accessed = **accessed + *right_value;
+		case Type::SubtractionAssignment:
+			return *accessed = **accessed - *right_value;
+		case Type::MultiplicationAssignment:
+			return *accessed = **accessed * *right_value;
+		case Type::DivisionAssignment:
+			return *accessed = **accessed / *right_value;
+		case Type::ModuloAssignment:
+			return *accessed = **accessed % *right_value;
+		case Type::BitwiseAndAssignment:
+			return *accessed = **accessed & *right_value;
+		case Type::BitwiseOrAssignment:
+			return *accessed = **accessed | *right_value;
+		case Type::BitwiseXorAssignment:
+			return *accessed = **accessed ^ *right_value;
+		case Type::ExponentiationAssignment:
+			return *accessed = (*accessed)->power(*right_value);
+		case Type::LogicalAndAssignment:
+			return *accessed = **accessed && *right_value;
+		case Type::LogicalOrAssignment:
+			return *accessed = **accessed || *right_value;
+		case Type::LeftShiftAssignment:
+			return *accessed = **accessed << *right_value;
+		case Type::RightShiftArithmeticAssignment:
+			return *accessed = (*accessed)->shiftRightArithmetic(*right_value);
+		case Type::RightShiftLogicalAssignment:
+			return *accessed = (*accessed)->shiftRightLogical(*right_value);
 		default:
-			break;
-	}
-
-	switch (evaluated_type) {
-		case ValueType::Array: {
-			const auto subscript = static_cast<size_t>(initial_subscript);
-			auto *array = dynamic_cast<Array *>(evaluated_object);
-			if (subscript < array->values.size())
-				return context.makeValue<Reference>(array->values.at(subscript));
-
-			break;
-		}
-		default:
-			break;
+			throw std::logic_error("Unsupported assignment operator: " + std::to_string(static_cast<int>(type)));
 	}
 }
+
+// Value ** AssignmentExpressionNode::access(Context &context, bool *const_out) {
+// 	if (left->getType() == Node::Type::Identifier) {
+// 		auto *identifier = dynamic_cast<IdentifierNode *>(left.get());
+// 		return context.stack.lookup(identifier->name, const_out);
+// 	}
+
+// 	throw std::logic_error("Assignment expression LHS type " + std::string(stringify(left->getType())) +
+// 		" unsupported");
+// }

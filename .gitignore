@@ -2,3 +2,7 @@ node_modules
 .dep
 *.o
 /interpreter
+/include/bison.h
+/src/bison.cpp
+/src/bison.output
+/src/flex.cpp

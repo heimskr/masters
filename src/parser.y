@@ -76,10 +76,6 @@ using AN = ASTNode;
 %token JSTOK_LSHIFT "<<"
 %token JSTOK_RSHIFTA ">>"
 %token JSTOK_RSHIFTL ">>>"
-%token JSTOK_META_NAME "#name"
-%token JSTOK_META_AUTHOR "#author"
-%token JSTOK_META_VERSION "#version"
-%token JSTOK_META_ORCID "#orcid"
 %token JSTOK_BREAK "break"
 %token JSTOK_CONTINUE "continue"
 %token JSTOK_FOR "for"
@@ -114,6 +110,8 @@ using AN = ASTNode;
 %token JSTOK_TYPEOF "typeof"
 %token JSTOK_IN "in"
 %token JSTOK_INSTANCEOF "instanceof"
+%token JSTOK_ARGUMENTS "arguments"
+%token JSTOK_VAR "var"
 
 %token JS_LIST JS_BLOCK JS_EMPTY JS_POSTPLUS JS_POSTMINUS
 
@@ -153,8 +151,7 @@ statement: block
          | for_loop
          | while_loop
          | conditional
-         | var_def
-         | var_decl
+         | full_var_def
          | expr       ";" { D($2); }
          | "return"   ";" { D($2); }
          | "break"    ";" { D($2); }
@@ -162,11 +159,15 @@ statement: block
          | "return" expr ";" { $$ = $1->adopt($2); D($3); }
          | ";" { $1->symbol = JS_EMPTY; };
 
-var_def: "let"   ident "=" expr ";" { $$ = $1->adopt({$2, $4}); D($3, $5); }
-       | "const" ident "=" expr ";" { $$ = $1->adopt({$2, $4}); D($3, $5); }
+full_var_def: var_type var_def_list ";" { $$ = $1->adopt($2); D($3); };
 
-var_decl: "let"   ident ";" { $$ = $1->adopt($2); D($3); }
-        | "const" ident ";" { $$ = $1->adopt($2); D($3); }
+var_def_list: var_def_list "," var_def { $$ = $1->adopt($3); D($2); }
+            | var_def { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); };
+
+var_def: ident "=" expr { $$ = $1->adopt($3); D($2); }
+       | ident;
+
+var_type: "let" | "const";
 
 function: "function"       "(" arglist_ ")" block { $$ = $1->adopt({$3, $5});     D($2, $4); }
         | "function" ident "(" arglist_ ")" block { $$ = $1->adopt({$4, $6, $2}); D($3, $5); };
@@ -195,6 +196,7 @@ expr: expr "&&"   expr { $$ = $2->adopt({$1, $3}); }
     | expr "!=="  expr { $$ = $2->adopt({$1, $3}); }
     | expr "<<"   expr { $$ = $2->adopt({$1, $3}); }
     | expr ">>"   expr { $$ = $2->adopt({$1, $3}); }
+    | expr ">>>"  expr { $$ = $2->adopt({$1, $3}); }
     | expr "<"    expr { $$ = $2->adopt({$1, $3}); }
     | expr ">"    expr { $$ = $2->adopt({$1, $3}); }
     | expr "<="   expr { $$ = $2->adopt({$1, $3}); }
@@ -247,7 +249,8 @@ expr: expr "&&"   expr { $$ = $2->adopt({$1, $3}); }
     | "null"
     | "undefined";
     | "NaN";
-    | "Infinity";
+    | "Infinity"
+    | "arguments";
 
 string: JSTOK_STRING;
 

@@ -1,12 +1,13 @@
 #pragma once
 
 #include <memory>
-#include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <utility>
-#include <variant>
 #include <vector>
+
+#include "ASTNode.h"
 
 class Context;
 class Value;
@@ -14,18 +15,19 @@ class Value;
 enum class Result {None, Break, Continue, Return};
 enum class DeclarationKind {Invalid = 0, Const, Let, Var};
 
+DeclarationKind getKind(int symbol);
+
+enum class NodeType {
+	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
+	VariableDefinitions,
+};
+
 class Node {
 	public:
-		enum class Type {
-			Invalid = 0, Program, BlockStatement, Identifier, VariableDeclarator, VariableDeclaration,
-			ExpressionStatement, BinaryExpression, ArrayExpression, Literal, AssignmentExpression, MemberExpression,
-		};
-
-		int start = -1;
-		int end = -1;
+		ASTLocation location;
 
 		virtual ~Node() = default;
-		virtual Type getType() const { return Type::Invalid; }
+		virtual NodeType getType() const { return NodeType::Invalid; }
 
 		virtual Value * evaluate(Context &) {
 			throw std::runtime_error("Cannot evaluate node of type " + std::string(typeid(*this).name()));
@@ -35,15 +37,15 @@ class Node {
 			throw std::runtime_error("Cannot interpret node of type " + std::string(typeid(*this).name()));
 		}
 
-		void assertType(Type);
+		void assertType(NodeType);
 
-		static std::unique_ptr<Node> fromJSON(const nlohmann::json &);
+		static std::unique_ptr<Node> fromAST(const ASTNode &);
 
 	protected:
-		void absorbPosition(const nlohmann::json &);
+		void absorbPosition(const ASTNode &);
 };
 
-const char * stringify(Node::Type);
+const char * stringify(NodeType);
 
 template <typename T>
 class Makeable {
@@ -53,135 +55,127 @@ class Makeable {
 	}
 };
 
-class ProgramNode: public Node {
+class Program: public Node {
 	public:
 		std::vector<std::unique_ptr<Node>> body;
 
-		ProgramNode(const nlohmann::json &);
+		Program(const ASTNode &);
 
-		Type getType() const override { return Type::Program; }
+		NodeType getType() const override { return NodeType::Program; }
 		std::pair<Result, Value *> interpret(Context &) override;
 };
 
-class BlockStatementNode: public Node {
+class Block: public Node {
 	public:
 		std::vector<std::unique_ptr<Node>> body;
 
-		BlockStatementNode(const nlohmann::json &);
+		Block(const ASTNode &);
 
-		Type getType() const override { return Type::BlockStatement; }
+		NodeType getType() const override { return NodeType::Block; }
 		std::pair<Result, Value *> interpret(Context &) override;
 };
 
-class IdentifierNode: public Node {
+class Expression: public Node {
+	protected:
+		Expression() = default;
+
 	public:
-		std::string name;
-
-		IdentifierNode(const nlohmann::json &);
-
-		Type getType() const override { return Type::Identifier; }
+		static std::unique_ptr<Expression> create(const ASTNode &);
 };
 
-class VariableDeclaratorNode: public Node {
+class BinaryExpression: public Expression {
 	public:
-		std::unique_ptr<Node> id;
-		std::unique_ptr<Node> init;
+		enum class Type {
+			Invalid = 0, LogicalAnd, LogicalOr, BitwiseAnd, BitwiseOr, BitwiseXor, TripleEquals, TripleNotEquals,
+			LeftShift, RightShiftArithmetic, RightShiftLogical, LessThan, GreaterThan, LessThanOrEqual,
+			GreaterThanOrEqual, Addition, Subtraction, Multiplication, Exponentiation, Division, Assignment, Modulo,
+			AdditionAssignment, SubtractionAssignment, MultiplicationAssignment, ExponentiationAssignment,
+			DivisionAssignment, ModuloAssignment, LeftShiftAssignment, RightShiftArithmeticAssignment,
+			RightShiftLogicalAssignment, BitwiseAndAssignment, BitwiseOrAssignment, LogicalOrAssignment,
+			LogicalAndAssignment, BitwiseXorAssignment, In, Instanceof,
+		};
 
-		VariableDeclaratorNode(const nlohmann::json &);
+		std::unique_ptr<Expression> left;
+		std::unique_ptr<Expression> right;
 
-		Type getType() const override { return Type::VariableDeclarator; }
-};
+		Type type = Type::Invalid;
 
-class VariableDeclarationNode: public Node {
-	public:
-		DeclarationKind kind;
-		std::vector<std::unique_ptr<VariableDeclaratorNode>> declarators;
+		BinaryExpression(const ASTNode &);
 
-		VariableDeclarationNode(const nlohmann::json &);
+		NodeType getType() const override { return NodeType::BinaryExpression; }
+		Value * evaluate(Context &) override;
 
-		Type getType() const override { return Type::VariableDeclaration; }
-		std::pair<Result, Value *> interpret(Context &) override;
+		static Type getType(int symbol);
+		static std::unordered_set<Type> assignmentTypes;
 
 	private:
-		static DeclarationKind getKind(const std::string &);
+		Value ** access(Context &, bool *is_const = nullptr);
+		Value * evaluateAccess(Context &);
 };
 
-class ExpressionStatementNode: public Node {
+class UnaryExpression: public Expression {
 	public:
-		std::unique_ptr<Node> expression;
+		enum class Type {
+			Invalid = 0, LogicalNot, BitwiseNot, Plus, Negation, PrefixIncrement, PrefixDecrement, PostfixIncrement,
+			PostfixDecrement, Delete, Void, Typeof,
+		};
 
-		ExpressionStatementNode(const nlohmann::json &);
+		std::unique_ptr<Expression> left;
+		std::unique_ptr<Expression> right;
 
-		Type getType() const override { return Type::ExpressionStatement; }
+		Type type = Type::Invalid;
+
+		UnaryExpression(const ASTNode &);
+
+		NodeType getType() const override { return NodeType::UnaryExpression; }
+		Value * evaluate(Context &) override;
+
+		static Type getType(int symbol);
+};
+
+class NewExpression: public Expression {
+	public:
+		std::unique_ptr<Expression> classExpression;
+		std::vector<std::unique_ptr<Expression>> arguments;
+};
+
+class Statement: public Node {
+	protected:
+		Statement() = default;
+
+	public:
+		static std::unique_ptr<Statement> create(const ASTNode &);
+};
+
+class VariableDefinition: public Node {
+	public:
+		std::string ident;
+		std::unique_ptr<Expression> value;
+
+		VariableDefinition(const ASTNode &);
+		NodeType getType() const override { return NodeType::VariableDefinition; }
 		std::pair<Result, Value *> interpret(Context &) override;
 };
 
-class IfStatementNode: public Node {
+class VariableDefinitions: public Statement {
 	public:
-		std::unique_ptr<Node> test;
-		std::unique_ptr<Node> consequent;
-		std::unique_ptr<Node> alternate;
+		DeclarationKind kind = DeclarationKind::Invalid;
+		std::vector<std::unique_ptr<VariableDefinition>> definitions;
 
-		IfStatementNode(const nlohmann::json &);
+		VariableDefinitions(const ASTNode &);
 
-		Type getType() const override { return Type::ExpressionStatement; }
+		NodeType getType() const override { return NodeType::VariableDefinitions; }
 		std::pair<Result, Value *> interpret(Context &) override;
 };
 
-class BinaryExpressionNode: public Node {
+class IfStatement: public Node {
 	public:
-		std::unique_ptr<Node> left;
-		std::unique_ptr<Node> right;
-		std::string op;
+		std::unique_ptr<Expression> condition;
+		std::unique_ptr<Statement> consequent;
+		std::unique_ptr<Statement> alternate;
 
-		BinaryExpressionNode(const nlohmann::json &);
+		IfStatement(const ASTNode &);
 
-		Type getType() const override { return Type::BinaryExpression; }
-		Value * evaluate(Context &) override;
-};
-
-class ArrayExpressionNode: public Node {
-	public:
-		std::vector<std::unique_ptr<Node>> elements;
-
-		ArrayExpressionNode(const nlohmann::json &);
-
-		Type getType() const override { return Type::ArrayExpression; }
-		Value * evaluate(Context &) override;
-};
-
-class LiteralNode: public Node {
-	public:
-		std::variant<std::string, double> value;
-
-		LiteralNode(const nlohmann::json &);
-
-		Type getType() const override { return Type::Literal; }
-		Value * evaluate(Context &) override;
-};
-
-class AssignmentExpressionNode: public Node {
-	public:
-		std::unique_ptr<Node> left;
-		std::unique_ptr<Node> right;
-		std::string op;
-
-		AssignmentExpressionNode(const nlohmann::json &);
-
-		Type getType() const override { return Type::AssignmentExpression; }
-		Value * evaluate(Context &) override;
-		Value ** access(Context &, bool *const_out = nullptr);
-};
-
-class MemberExpressionNode: public Node {
-	public:
-		bool computed = false;
-		bool optional = false;
-		std::unique_ptr<Node> object;
-		std::unique_ptr<Node> property;
-
-		MemberExpressionNode(const nlohmann::json &);
-
-		Type getType() const override { return Type::MemberExpression; }
-		Value * evaluate(Context &) override;
+		NodeType getType() const override { return NodeType::IfStatement; }
+		std::pair<Result, Value *> interpret(Context &) override;
 };
