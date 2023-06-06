@@ -8,7 +8,7 @@ CFLAGS          := -std=$(STANDARD) $(OPTIMIZATION) $(WARNINGS) -Iinclude -Ijson
 OUTPUT          ?= interpreter
 LDFLAGS         ?= -pthread
 
-CLOC_OPTIONS    := --exclude-dir=.vscode
+CLOC_OPTIONS    := --exclude-dir=.vscode,node_modules,json,js --fullpath --not-match-f='^.\/((include|src)\/(flex|bison)\.(cpp|h|output)|.*\.js(on)?)$$'
 
 LEXERCPP        := src/flex.cpp
 PARSERCPP       := src/bison.cpp
