@@ -162,91 +162,6 @@ std::pair<Result, Value *> IfStatement::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
-// BinaryExpressionNode::BinaryExpressionNode(const ASTNode &node):
-// 	left(Node::fromJSON(json.at("left"))), right(Node::fromJSON(json.at("right"))), op(json.at("alternate")) {}
-
-// Value * BinaryExpressionNode::evaluate(Context &context) {
-// 	Value *out = nullptr;
-
-// 	if (op == "+") {
-// 		out = *left->evaluate(context) + *right->evaluate(context);
-// 	} else if (op == "-") {
-// 		out = *left->evaluate(context) - *right->evaluate(context);
-// 	} else if (op == "*") {
-// 		out = *left->evaluate(context) * *right->evaluate(context);
-// 	} else if (op == "/") {
-// 		out = *left->evaluate(context) / *right->evaluate(context);
-// 	} else if (op == "%") {
-// 		out = *left->evaluate(context) % *right->evaluate(context);
-// 	} else if (op == "&") {
-// 		out = *left->evaluate(context) & *right->evaluate(context);
-// 	} else if (op == "|") {
-// 		out = *left->evaluate(context) | *right->evaluate(context);
-// 	} else if (op == "^") {
-// 		out = *left->evaluate(context) ^ *right->evaluate(context);
-// 	} else if (op == "==") {
-// 		out = *left->evaluate(context) == *right->evaluate(context);
-// 	} else if (op == "!=") {
-// 		out = *left->evaluate(context) != *right->evaluate(context);
-// 	} else if (op == "<") {
-// 		out = *left->evaluate(context) < *right->evaluate(context);
-// 	} else if (op == ">") {
-// 		out = *left->evaluate(context) > *right->evaluate(context);
-// 	} else if (op == "<=") {
-// 		out = *left->evaluate(context) <= *right->evaluate(context);
-// 	} else if (op == ">=") {
-// 		out = *left->evaluate(context) >= *right->evaluate(context);
-// 	} else if (op == "**") {
-// 		out = left->evaluate(context)->power(*right->evaluate(context));
-// 	} else if (op == "&&") {
-// 		Value *left_value = left->evaluate(context);
-// 		out = *left_value? right->evaluate(context) : left_value;
-// 	} else if (op == "||") {
-// 		Value *left_value = left->evaluate(context);
-// 		out = *left_value? left_value : right->evaluate(context);
-// 	}
-
-// 	if (out == nullptr)
-// 		throw std::invalid_argument("Unrecognized binary operator: \"" + op + '"');
-
-// 	out->context = &context;
-// 	return out;
-// }
-
-// ArrayExpressionNode::ArrayExpressionNode(const ASTNode &node) {
-// 	for (const auto &element: json.at("elements").items())
-// 		elements.push_back(Node::fromJSON(element.value()));
-// }
-
-// Value * ArrayExpressionNode::evaluate(Context &context) {
-// 	auto *out = context.makeValue<Array>();
-
-// 	for (const auto &element: elements)
-// 		out->values.emplace_back(element->evaluate(context));
-
-// 	return out;
-// }
-
-// LiteralNode::LiteralNode(const ASTNode &node) {
-// 	const auto &value_json = json.at("value");
-// 	if (value_json.is_string())
-// 		value = value_json.get<std::string>();
-// 	else if (value_json.is_number())
-// 		value = value_json.get<double>();
-// 	else
-// 		throw std::runtime_error("Invalid literal value: " + value_json.dump());
-// }
-
-// Value * LiteralNode::evaluate(Context &context) {
-// 	if (std::holds_alternative<std::string>(value))
-// 		return context.makeValue<String>(std::get<std::string>(value));
-
-// 	if (std::holds_alternative<double>(value))
-// 		return context.makeValue<Number>(std::get<double>(value));
-
-// 	throw std::runtime_error("LiteralNode value has an invalid type");
-// }
-
 std::pair<Result, Value *> Expression::interpret(Context &context) {
 	return {Result::None, evaluate(context)};
 }
@@ -370,16 +285,6 @@ UnaryExpression::Type UnaryExpression::getType(int symbol) {
 				std::string(jsParser.getName(symbol)));
 	}
 }
-
-// Value ** AssignmentExpressionNode::access(Context &context, bool *const_out) {
-// 	if (left->getType() == Node::Type::Identifier) {
-// 		auto *identifier = dynamic_cast<IdentifierNode *>(left.get());
-// 		return context.stack.lookup(identifier->name, const_out);
-// 	}
-
-// 	throw std::logic_error("Assignment expression LHS type " + std::string(stringify(left->getType())) +
-// 		" unsupported");
-// }
 
 std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 	switch (node.symbol) {
