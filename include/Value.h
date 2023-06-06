@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+class Context;
 class Number;
 
 #define VALUE_OPERATOR_OVERRIDES \
@@ -187,11 +188,11 @@ class Reference: public Value {
 
 class Function: public Value {
 	public:
-		std::function<Value *(const std::vector<Value *> &arguments)> function;
+		std::function<Value *(Context &, const std::vector<Value *> &arguments)> function;
 		Value *thisObj = nullptr;
-
-		ValueType getType() const override { return ValueType::Function; }
 		Function(decltype(function) function_ = {}, Value *this_obj = nullptr);
+		std::vector<Value *> getReferents() const override { if (thisObj != nullptr) return {thisObj}; return {}; }
+		ValueType getType() const override { return ValueType::Function; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Function"; }
 		explicit operator std::string() const override { return "function(...) {...}"; }

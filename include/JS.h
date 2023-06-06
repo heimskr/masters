@@ -38,10 +38,6 @@ class ScopeStack {
 		friend class Context;
 };
 
-struct JSError: public std::runtime_error {
-	using std::runtime_error::runtime_error;
-};
-
 class Context {
 	public:
 		std::unordered_set<Value *> valuePool;

@@ -82,10 +82,10 @@ std::pair<Result, Value *> Program::interpret(Context &context) {
 			return {result, value};
 
 		if (result == Result::Break)
-			throw JSException("Invalid break statement", node->location);
+			throw JSError("Invalid break statement", node->location);
 
 		if (result == Result::Continue)
-			throw JSException("Invalid continue statement", node->location);
+			throw JSError("Invalid continue statement", node->location);
 	}
 
 	return {Result::None, nullptr};
@@ -257,7 +257,17 @@ BinaryExpression::BinaryExpression(const ASTNode &node):
 	right(Expression::create(*node.at(1))) {}
 
 Value * BinaryExpression::evaluate(Context &context) {
-	throw Unimplemented();
+	switch (type) {
+		case Type::TripleEquals:
+			return *left->evaluate(context) == *right->evaluate(context);
+
+		case Type::TripleNotEquals:
+			return *left->evaluate(context) != *right->evaluate(context);
+
+		default:
+			throw Unimplemented("Can't evaluate BinaryExpression with type " + std::to_string(static_cast<int>(type)) +
+				": unimplemented");
+	}
 }
 
 Value ** BinaryExpression::access(Context &context, bool *is_const) {
@@ -369,6 +379,16 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_NUMBER:
 			return std::make_unique<NumberLiteral>(node);
 
+		case JSTOK_STRING:
+			return std::make_unique<StringLiteral>(node);
+
+		case JSTOK_LPAREN:
+			return std::make_unique<FunctionCall>(node);
+
+		case JSTOK_TRUE:
+		case JSTOK_FALSE:
+			return std::make_unique<BooleanLiteral>(node);
+
 		default:
 			node.debug();
 			throw std::invalid_argument("Unhandled symbol in Expression::create: " + std::string(node.getName()));
@@ -411,4 +431,45 @@ NumberLiteral::NumberLiteral(const ASTNode &node): value(parseDouble(*node.text)
 
 Value * NumberLiteral::evaluate(Context &context) {
 	return context.makeValue<Number>(value);
+}
+
+StringLiteral::StringLiteral(const ASTNode &node): value(node.unquote()) {
+	absorbPosition(node);
+}
+
+Value * StringLiteral::evaluate(Context &context) {
+	return context.makeValue<String>(value);
+}
+
+BooleanLiteral::BooleanLiteral(const ASTNode &node): value(node.symbol == JSTOK_TRUE) {
+	absorbPosition(node);
+}
+
+Value * BooleanLiteral::evaluate(Context &context) {
+	return context.makeValue<Boolean>(value);
+}
+
+FunctionCall::FunctionCall(const ASTNode &node): function(Expression::create(*node.front())) {
+	for (const auto *subnode: *node.at(1))
+		arguments.emplace_back(Expression::create(*subnode));
+}
+
+Value * FunctionCall::evaluate(Context &context) {
+	assert(function);
+
+	Value *evaluated_function = function->evaluate(context);
+	assert(evaluated_function != nullptr);
+
+	if (evaluated_function->getType() != ValueType::Function)
+		throw TypeError('"' + static_cast<std::string>(*evaluated_function) + "\" is not a function");
+
+	auto &cast_function = dynamic_cast<Function &>(*evaluated_function);
+
+	std::vector<Value *> argument_values;
+	argument_values.reserve(arguments.size());
+
+	for (const auto &argument: arguments)
+		argument_values.emplace_back(argument->evaluate(context));
+
+	return cast_function.function(context, argument_values);
 }

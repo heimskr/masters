@@ -20,7 +20,7 @@ DeclarationKind getKind(int symbol);
 
 enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
-	VariableDefinitions,
+	VariableDefinitions, FunctionCall,
 };
 
 class Node {
@@ -190,8 +190,31 @@ class Identifier: public Expression {
 struct NumberLiteral: public Expression {
 	public:
 		double value;
-
 		NumberLiteral(const ASTNode &node);
+		Value * evaluate(Context &) override;
+};
 
+struct StringLiteral: public Expression {
+	public:
+		std::string value;
+		StringLiteral(const ASTNode &node);
+		Value * evaluate(Context &) override;
+};
+
+struct BooleanLiteral: public Expression {
+	public:
+		bool value;
+		BooleanLiteral(const ASTNode &node);
+		Value * evaluate(Context &) override;
+};
+
+struct FunctionCall: public Expression {
+	public:
+		std::unique_ptr<Expression> function;
+		std::vector<std::unique_ptr<Expression>> arguments;
+
+		FunctionCall(const ASTNode &);
+
+		NodeType getType() const override { return NodeType::FunctionCall; }
 		Value * evaluate(Context &) override;
 };

@@ -8,17 +8,17 @@ struct ConversionError: std::runtime_error {
 	using std::runtime_error::runtime_error;
 };
 
-struct JSException: std::runtime_error {
+struct JSError: std::runtime_error {
 	size_t line = 0;
 	size_t column = 0;
 
-	JSException(std::string message, size_t line_ = 0, size_t column_ = 0):
+	JSError(std::string message, size_t line_ = 0, size_t column_ = 0):
 		std::runtime_error(std::move(message)),
 		line(line_),
 		column(column_) {}
 
-	JSException(std::string message, const ASTLocation &location):
-		JSException(std::move(message), location.line, location.column) {}
+	JSError(std::string message, const ASTLocation &location):
+		JSError(std::move(message), location.line, location.column) {}
 };
 
 struct GenericError: std::runtime_error {
@@ -29,15 +29,20 @@ struct GenericError: std::runtime_error {
 		std::runtime_error(std::forward<Args>(args)...), location(location_) {}
 } __attribute__((packed, aligned(16)));
 
-struct ConstError: JSException {
-	using JSException::JSException;
+struct ConstError: JSError {
+	using JSError::JSError;
 };
 
 struct Unimplemented: std::runtime_error {
 	Unimplemented(): std::runtime_error("Unimplemented") {}
+	Unimplemented(std::string message): std::runtime_error(std::move(message)) {}
 };
 
-struct ReferenceError: JSException {
+struct ReferenceError: JSError {
 	ReferenceError(const std::string &name, const ASTLocation &location):
-		JSException(name + " is not defined", location) {}
+		JSError(name + " is not defined", location) {}
+};
+
+struct TypeError: JSError {
+	using JSError::JSError;
 };
