@@ -1,16 +1,26 @@
-CHECK			?= none
-COMPILER		?= clang++
-DEBUGGER		?= lldb
-OPTIMIZATION	?= -O0 -g
-STANDARD		?= c++20
-WARNINGS		?= -Wall -Wextra
-CFLAGS			:= -std=$(STANDARD) $(OPTIMIZATION) $(WARNINGS) -Iinclude -Ijson/single_include
-OUTPUT			?= interpreter
-LDFLAGS			?= -pthread
+CHECK           ?= none
+COMPILER        ?= clang++
+DEBUGGER        ?= lldb
+OPTIMIZATION    ?= -O0 -g
+STANDARD        ?= c++20
+WARNINGS        ?= -Wall -Wextra
+CFLAGS          := -std=$(STANDARD) $(OPTIMIZATION) $(WARNINGS) -Iinclude -Ijson/single_include
+OUTPUT          ?= interpreter
+LDFLAGS         ?= -pthread
 
-CLOC_OPTIONS	:= --exclude-dir=.vscode
-SOURCES			:= $(shell find src/*.cpp)
-OBJECTS			:= $(SOURCES:.cpp=.o)
+CLOC_OPTIONS    := --exclude-dir=.vscode
+
+LEXERCPP        := src/flex.cpp
+PARSERCPP       := src/bison.cpp
+PARSERHDR       := include/bison.h
+LEXERSRC        := src/lexer.l
+PARSERSRC       := src/parser.y
+
+LEXFLAGS        := -Wno-sign-compare -Wno-register
+BISONFLAGS      := --color=always
+
+SOURCES         := $(shell find src/*.cpp) $(LEXERCPP) $(PARSERCPP)
+OBJECTS         := $(SOURCES:.cpp=.o)
 
 ifeq ($(CHECK), asan)
 	COMPILER := $(COMPILER) -fsanitize=address -fno-common
@@ -27,6 +37,21 @@ $(OUTPUT): $(OBJECTS)
 
 %.o: %.cpp
 	$(COMPILER) $(CFLAGS) -c $< -o $@
+
+$(LEXERCPP): $(LEXERSRC) $(PARSERHDR)
+	flex --prefix=js --outfile=$(LEXERCPP) $(LEXERSRC)
+
+$(PARSERCPP) $(PARSERHDR): $(PARSERSRC)
+	bison $(BISONFLAGS) --defines=$(PARSERHDR) --output=$(PARSERCPP) $(PARSERSRC)
+
+counter:
+	bison -Wcounterexamples $(BISONFLAGS) --defines=$(PARSERHDR) --output=$(PARSERCPP) $(PARSERSRC)
+
+$(LEXERCPP:.cpp=.o): $(LEXERCPP)
+	$(COMPILER) $(CFLAGS) $(LEXFLAGS) -c $< -o $@
+
+$(PARSERCPP:.cpp=.o): $(PARSERCPP) $(PARSERHDR)
+	$(COMPILER) $(CFLAGS) $(LEXFLAGS) -c $< -o $@
 
 test: $(OUTPUT)
 	./$(OUTPUT) < js/assign.js

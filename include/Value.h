@@ -150,34 +150,35 @@ class String: public Value {
 };
 
 class Reference: public Value {
-	Value *referent;
-	ValueType getType() const override { return ValueType::Reference; }
-	Reference(Value *referent_): referent(referent_) {}
-	std::vector<Value *> getReferents() const override { assert(referent); return {referent}; }
-	Number * toNumber() const override;
-	std::string getName() const override { return "Reference[" + referent->getName() + ']'; }
-	explicit operator std::string() const override { assert(referent); return static_cast<std::string>(*referent); }
-	explicit operator double() const override { assert(referent); return static_cast<double>(*referent); }
-	explicit operator bool() const override { assert(referent); return static_cast<bool>(*referent); }
-	// Alas.
-	Value * operator+(const Value &)  const override;
-	Value * operator-(const Value &)  const override;
-	Value * operator*(const Value &)  const override;
-	Value * operator/(const Value &)  const override;
-	Value * operator%(const Value &)  const override;
-	Value * operator&(const Value &)  const override;
-	Value * operator|(const Value &)  const override;
-	Value * operator^(const Value &)  const override;
-	Value * operator==(const Value &) const override;
-	Value * operator!=(const Value &) const override;
-	Value * operator<(const Value &)  const override;
-	Value * operator>(const Value &)  const override;
-	Value * operator<=(const Value &) const override;
-	Value * operator>=(const Value &) const override;
-	Value * power(const Value &)      const override;
-	Value * operator&&(const Value &) const override;
-	Value * operator||(const Value &) const override;
-	Value * operator<<(const Value &) const override;
-	Value * shiftRightLogical(const Value &) const override;
-	Value * shiftRightArithmetic(const Value &) const override;
+	public:
+		Value *referent;
+		ValueType getType() const override { return ValueType::Reference; }
+		Reference(Value *referent_): referent(referent_) {}
+		std::vector<Value *> getReferents() const override { assert(referent); return {referent}; }
+		Number * toNumber() const override { assert(referent); return referent->toNumber(); }
+		std::string getName() const override { return "Reference[" + referent->getName() + ']'; }
+		explicit operator std::string() const override { assert(referent); return static_cast<std::string>(*referent); }
+		explicit operator double() const override { assert(referent); return static_cast<double>(*referent); }
+		explicit operator bool() const override { assert(referent); return static_cast<bool>(*referent); }
+		// Alas.
+		Value * operator+(const Value &)  const override;
+		Value * operator-(const Value &)  const override;
+		Value * operator*(const Value &)  const override;
+		Value * operator/(const Value &)  const override;
+		Value * operator%(const Value &)  const override;
+		Value * operator&(const Value &)  const override;
+		Value * operator|(const Value &)  const override;
+		Value * operator^(const Value &)  const override;
+		Value * operator==(const Value &) const override;
+		Value * operator!=(const Value &) const override;
+		Value * operator<(const Value &)  const override;
+		Value * operator>(const Value &)  const override;
+		Value * operator<=(const Value &) const override;
+		Value * operator>=(const Value &) const override;
+		Value * power(const Value &)      const override;
+		Value * operator&&(const Value &) const override;
+		Value * operator||(const Value &) const override;
+		Value * operator<<(const Value &) const override;
+		Value * shiftRightLogical(const Value &) const override;
+		Value * shiftRightArithmetic(const Value &) const override;
 };

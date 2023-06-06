@@ -5,7 +5,7 @@
 
 #include "JS.h"
 #include "Node.h"
-#include "Process.h"
+#include "Parser.h"
 
 int main(int, char **) {
 	// https://stackoverflow.com/a/202097/227663
@@ -13,12 +13,11 @@ int main(int, char **) {
 	std::istream_iterator<char> ibegin(std::cin), iend;
 	const std::string input(ibegin, iend);
 
-	Process process({"./parser.js"});
-	process.writeAll(input);
-	const std::string output = process.readAll();
+	jsParser.in(input);
+	jsParser.debug(false, false);
+	jsParser.parse();
 
-	const nlohmann::json parsed = nlohmann::json::parse(output);
-	auto program = Node::fromJSON(parsed);
+	auto program = Node::fromAST(parsed);
 	if (!program) {
 		std::cerr << "Program node is null!\n";
 		return 1;

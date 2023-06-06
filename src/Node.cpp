@@ -1,3 +1,4 @@
+#include <cmath>
 #include <iostream>
 
 #include "JS.h"
@@ -269,6 +270,8 @@ AssignmentExpressionNode::AssignmentExpressionNode(const nlohmann::json &json):
 	left(Node::fromJSON(json.at("left"))), right(Node::fromJSON(json.at("right"))), op(json.at("operator")) {}
 
 Value * AssignmentExpressionNode::evaluate(Context &context) {
+	auto saver = context.writeMember();
+
 	bool is_const = false;
 	Value **accessed = access(context, &is_const);
 	assert(accessed);
@@ -322,4 +325,49 @@ Value ** AssignmentExpressionNode::access(Context &context, bool *const_out) {
 
 	throw std::logic_error("Assignment expression LHS type " + std::string(stringify(left->getType())) +
 		" unsupported");
+}
+
+MemberExpressionNode::MemberExpressionNode(const nlohmann::json &json) {
+	if (auto iter = json.find("computed"); iter != json.end())
+		computed = *iter;
+
+	if (auto iter = json.find("optional"); iter != json.end())
+		optional = *iter;
+
+	object = Node::fromJSON(json.at("object"));
+	property = Node::fromJSON(json.at("property"));
+}
+
+Value * MemberExpressionNode::evaluate(Context &context) {
+	Value *evaluated_object = object->evaluate(context);
+	Value *evaluated_property = property->evaluate(context);
+
+	assert(evaluated_object);
+	assert(evaluated_property);
+
+	const auto initial_subscript = static_cast<double>(*evaluated_property);
+	const auto evaluated_type = evaluated_object->getType();
+
+	switch (evaluated_type) {
+		case ValueType::Array:
+		case ValueType::String:
+			if (std::isnan(initial_subscript) || std::isinf(initial_subscript))
+				return context.makeValue<Undefined>();
+			break;
+		default:
+			break;
+	}
+
+	switch (evaluated_type) {
+		case ValueType::Array: {
+			const auto subscript = static_cast<size_t>(initial_subscript);
+			auto *array = dynamic_cast<Array *>(evaluated_object);
+			if (subscript < array->values.size())
+				return context.makeValue<Reference>(array->values.at(subscript));
+
+			break;
+		}
+		default:
+			break;
+	}
 }

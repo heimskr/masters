@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Node.h"
+#include "Utils.h"
 #include "Value.h"
 
 class Scope {
@@ -47,6 +48,7 @@ class Context {
 		ScopeStack stack;
 		size_t lineNumber = 0;
 		size_t columnNumber = 0;
+		bool writingMember = false;
 
 		Context() = default;
 
@@ -59,5 +61,9 @@ class Context {
 			new_value->context = this;
 			valuePool.insert(new_value);
 			return new_value;
+		}
+
+		inline auto writeMember() {
+			return FieldSaver(*this, &Context::writingMember);
 		}
 };

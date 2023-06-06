@@ -18,7 +18,7 @@ class Node {
 	public:
 		enum class Type {
 			Invalid = 0, Program, BlockStatement, Identifier, VariableDeclarator, VariableDeclaration,
-			ExpressionStatement, BinaryExpression, ArrayExpression, Literal, AssignmentExpression,
+			ExpressionStatement, BinaryExpression, ArrayExpression, Literal, AssignmentExpression, MemberExpression,
 		};
 
 		int start = -1;
@@ -171,4 +171,17 @@ class AssignmentExpressionNode: public Node {
 		Type getType() const override { return Type::AssignmentExpression; }
 		Value * evaluate(Context &) override;
 		Value ** access(Context &, bool *const_out = nullptr);
+};
+
+class MemberExpressionNode: public Node {
+	public:
+		bool computed = false;
+		bool optional = false;
+		std::unique_ptr<Node> object;
+		std::unique_ptr<Node> property;
+
+		MemberExpressionNode(const nlohmann::json &);
+
+		Type getType() const override { return Type::MemberExpression; }
+		Value * evaluate(Context &) override;
 };

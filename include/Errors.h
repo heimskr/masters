@@ -2,6 +2,8 @@
 
 #include <stdexcept>
 
+#include "ASTNode.h"
+
 struct ConversionError: std::runtime_error {
 	using std::runtime_error::runtime_error;
 };
@@ -15,6 +17,14 @@ struct JSException: std::runtime_error {
 		line(line_),
 		column(column_) {}
 };
+
+struct GenericError: std::runtime_error {
+	ASTLocation location;
+	using std::runtime_error::runtime_error;
+	template <typename... Args>
+	explicit GenericError(const ASTLocation &location_, Args &&...args):
+		std::runtime_error(std::forward<Args>(args)...), location(location_) {}
+} __attribute__((packed, aligned(16)));
 
 struct ConstError: JSException {
 	using JSException::JSException;
