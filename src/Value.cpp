@@ -307,3 +307,15 @@ Value * Reference::shiftRightArithmetic(const Value &other) const {
 	assert(referent);
 	return referent->shiftRightArithmetic(other);
 }
+
+Function::Function(decltype(function) function_, Value *this_obj):
+	function(std::move(function_)),
+	thisObj(this_obj) {}
+
+Number * Function::toNumber() const {
+	return make<Number>(*this, nan(""));
+}
+
+Value * Function::operator==(const Value &other) const {
+	return make<Boolean>(*this, this == &other);
+}

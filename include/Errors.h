@@ -32,3 +32,12 @@ struct GenericError: std::runtime_error {
 struct ConstError: JSException {
 	using JSException::JSException;
 };
+
+struct Unimplemented: std::runtime_error {
+	Unimplemented(): std::runtime_error("Unimplemented") {}
+};
+
+struct ReferenceError: JSException {
+	ReferenceError(const std::string &name, const ASTLocation &location):
+		JSException(name + " is not defined", location) {}
+};

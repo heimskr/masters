@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -11,7 +12,7 @@ class Number;
 #define VALUE_OPERATOR_OVERRIDES \
 	virtual Value * operator==(const Value &) const override;
 
-enum class ValueType {Null, Undefined, Object, Array, Number, Boolean, String, Reference};
+enum class ValueType {Null, Undefined, Object, Array, Number, Boolean, String, Reference, Function};
 
 class Value {
 	public:
@@ -159,8 +160,8 @@ class Reference: public Value {
 		Number * toNumber() const override { assert(referent); return referent->toNumber(); }
 		std::string getName() const override { return "Reference[" + referent->getName() + ']'; }
 		explicit operator std::string() const override { assert(referent); return static_cast<std::string>(*referent); }
-		explicit operator double() const override { assert(referent); return static_cast<double>(*referent); }
-		explicit operator bool() const override { assert(referent); return static_cast<bool>(*referent); }
+		explicit operator double()      const override { assert(referent); return static_cast<double>(*referent);      }
+		explicit operator bool()        const override { assert(referent); return static_cast<bool>(*referent);        }
 		// Alas.
 		Value * operator+(const Value &)  const override;
 		Value * operator-(const Value &)  const override;
@@ -182,4 +183,19 @@ class Reference: public Value {
 		Value * operator<<(const Value &) const override;
 		Value * shiftRightLogical(const Value &) const override;
 		Value * shiftRightArithmetic(const Value &) const override;
+};
+
+class Function: public Value {
+	public:
+		std::function<Value *(const std::vector<Value *> &arguments)> function;
+		Value *thisObj = nullptr;
+
+		ValueType getType() const override { return ValueType::Function; }
+		Function(decltype(function) function_ = {}, Value *this_obj = nullptr);
+		Number * toNumber() const override;
+		std::string getName() const override { return "Function"; }
+		explicit operator std::string() const override { return "function(...) {...}"; }
+		explicit operator double()      const override { return nan("");               }
+		explicit operator bool()        const override { return true;                  }
+		VALUE_OPERATOR_OVERRIDES
 };

@@ -1,3 +1,4 @@
+#include <cassert>
 #include <iostream>
 #include <sstream>
 
@@ -57,6 +58,7 @@ ASTNode * ASTNode::operator[](size_t index) const {
 }
 
 ASTNode * ASTNode::at(size_t index) const {
+	assert(index < size());
 	return *std::next(children.begin(), ssize_t(index));
 }
 

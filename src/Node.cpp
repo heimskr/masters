@@ -7,6 +7,7 @@
 #include "JS.h"
 #include "Lexer.h"
 #include "Node.h"
+#include "Parser.h"
 #include "Value.h"
 
 std::unordered_set<BinaryExpression::Type> BinaryExpression::assignmentTypes {
@@ -94,7 +95,7 @@ Block::Block(const ASTNode &node) {
 	absorbPosition(node);
 
 	for (const auto *subnode: node)
-		body.emplace_back(Node::fromAST(*subnode));
+		body.emplace_back(Statement::create(*subnode));
 }
 
 std::pair<Result, Value *> Block::interpret(Context &context) {
@@ -112,10 +113,18 @@ std::pair<Result, Value *> Block::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
+VariableDefinition::VariableDefinition(const ASTNode &node):
+	ident(*node.at(0)->text),
+	value(1 < node.size()? Expression::create(*node.at(1)) : nullptr) {}
+
+std::pair<Result, Value *> VariableDefinition::interpret(Context &context) {
+	throw std::logic_error("Unimplemented");
+}
+
 VariableDefinitions::VariableDefinitions(const ASTNode &node): kind(getKind(node.at(0)->symbol)) {
 	absorbPosition(node);
 
-	for (const auto *subnode: node)
+	for (const auto *subnode: *node.front())
 		definitions.push_back(std::make_unique<VariableDefinition>(*subnode));
 }
 
@@ -242,6 +251,15 @@ std::pair<Result, Value *> IfStatement::interpret(Context &context) {
 // 	throw std::runtime_error("LiteralNode value has an invalid type");
 // }
 
+BinaryExpression::BinaryExpression(const ASTNode &node):
+	type(getType(node.symbol)),
+	left(Expression::create(*node.at(0))),
+	right(Expression::create(*node.at(1))) {}
+
+Value * BinaryExpression::evaluate(Context &context) {
+	throw Unimplemented();
+}
+
 Value ** BinaryExpression::access(Context &context, bool *is_const) {
 	throw std::logic_error("Unimplemented");
 }
@@ -294,6 +312,35 @@ Value * BinaryExpression::evaluateAccess(Context &context) {
 	}
 }
 
+BinaryExpression::Type BinaryExpression::getType(int symbol) {
+	switch (symbol) {
+		case JSTOK_TEQ:   return Type::TripleEquals;
+		case JSTOK_NTEQ:  return Type::TripleNotEquals;
+		case JSTOK_PLUS:  return Type::Addition;
+		case JSTOK_MINUS: return Type::Subtraction;
+
+		default:
+			throw std::invalid_argument("Unknown symbol in BinaryExpression::getType: " +
+				std::string(jsParser.getName(symbol)));
+	}
+}
+
+UnaryExpression::UnaryExpression(const ASTNode &node):
+	type(getType(node.symbol)),
+	subexpr(Expression::create(*node.front())) {}
+
+Value * UnaryExpression::evaluate(Context &context) {
+	throw Unimplemented();
+}
+
+UnaryExpression::Type UnaryExpression::getType(int symbol) {
+	switch (symbol) {
+		default:
+			throw std::invalid_argument("Unknown symbol in UnaryExpression::getType: " +
+				std::string(jsParser.getName(symbol)));
+	}
+}
+
 // Value ** AssignmentExpressionNode::access(Context &context, bool *const_out) {
 // 	if (left->getType() == Node::Type::Identifier) {
 // 		auto *identifier = dynamic_cast<IdentifierNode *>(left.get());
@@ -303,3 +350,65 @@ Value * BinaryExpression::evaluateAccess(Context &context) {
 // 	throw std::logic_error("Assignment expression LHS type " + std::string(stringify(left->getType())) +
 // 		" unsupported");
 // }
+
+std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
+	switch (node.symbol) {
+		case JSTOK_TEQ:
+		case JSTOK_NTEQ:
+			return std::make_unique<BinaryExpression>(node);
+
+		case JSTOK_PLUS:
+		case JSTOK_MINUS:
+			if (node.size() == 1)
+				return std::make_unique<UnaryExpression>(node);
+			return std::make_unique<BinaryExpression>(node);
+
+		case JSTOK_IDENT:
+			return std::make_unique<Identifier>(node);
+
+		case JSTOK_NUMBER:
+			return std::make_unique<NumberLiteral>(node);
+
+		default:
+			node.debug();
+			throw std::invalid_argument("Unhandled symbol in Expression::create: " + std::string(node.getName()));
+	}
+}
+
+std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
+	switch (node.symbol) {
+		case JSTOK_LET:
+		case JSTOK_CONST:
+		case JSTOK_VAR:
+			return std::make_unique<VariableDefinitions>(node);
+		case JSTOK_IF:
+			return std::make_unique<IfStatement>(node);
+		case JS_BLOCK:
+			return std::make_unique<Block>(node);
+		case JSTOK_LPAREN:
+			return Expression::create(node);
+		default:
+			node.debug();
+			throw std::invalid_argument("Unhandled symbol in Statement::create: " + std::string(node.getName()));
+	}
+
+}
+
+Identifier::Identifier(const ASTNode &node): name(*node.text) {
+	absorbPosition(node);
+}
+
+Value * Identifier::evaluate(Context &context) {
+	if (Value **result = context.stack.lookup(name))
+		return *result;
+
+	throw ReferenceError(name, location);
+}
+
+NumberLiteral::NumberLiteral(const ASTNode &node): value(parseDouble(*node.text)) {
+	absorbPosition(node);
+}
+
+Value * NumberLiteral::evaluate(Context &context) {
+	return context.makeValue<Number>(value);
+}

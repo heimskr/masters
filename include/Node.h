@@ -10,6 +10,7 @@
 #include "ASTNode.h"
 
 class Context;
+class Statement;
 class Value;
 
 enum class Result {None, Break, Continue, Return};
@@ -57,7 +58,7 @@ class Makeable {
 
 class Program: public Node {
 	public:
-		std::vector<std::unique_ptr<Node>> body;
+		std::vector<std::unique_ptr<Statement>> body;
 
 		Program(const ASTNode &);
 
@@ -65,17 +66,15 @@ class Program: public Node {
 		std::pair<Result, Value *> interpret(Context &) override;
 };
 
-class Block: public Node {
+class Statement: public Node {
+	protected:
+		Statement() = default;
+
 	public:
-		std::vector<std::unique_ptr<Node>> body;
-
-		Block(const ASTNode &);
-
-		NodeType getType() const override { return NodeType::Block; }
-		std::pair<Result, Value *> interpret(Context &) override;
+		static std::unique_ptr<Statement> create(const ASTNode &);
 };
 
-class Expression: public Node {
+class Expression: public Statement {
 	protected:
 		Expression() = default;
 
@@ -95,10 +94,9 @@ class BinaryExpression: public Expression {
 			LogicalAndAssignment, BitwiseXorAssignment, In, Instanceof,
 		};
 
+		Type type = Type::Invalid;
 		std::unique_ptr<Expression> left;
 		std::unique_ptr<Expression> right;
-
-		Type type = Type::Invalid;
 
 		BinaryExpression(const ASTNode &);
 
@@ -120,10 +118,8 @@ class UnaryExpression: public Expression {
 			PostfixDecrement, Delete, Void, Typeof,
 		};
 
-		std::unique_ptr<Expression> left;
-		std::unique_ptr<Expression> right;
-
 		Type type = Type::Invalid;
+		std::unique_ptr<Expression> subexpr;
 
 		UnaryExpression(const ASTNode &);
 
@@ -139,12 +135,14 @@ class NewExpression: public Expression {
 		std::vector<std::unique_ptr<Expression>> arguments;
 };
 
-class Statement: public Node {
-	protected:
-		Statement() = default;
-
+class Block: public Statement {
 	public:
-		static std::unique_ptr<Statement> create(const ASTNode &);
+		std::vector<std::unique_ptr<Statement>> body;
+
+		Block(const ASTNode &);
+
+		NodeType getType() const override { return NodeType::Block; }
+		std::pair<Result, Value *> interpret(Context &) override;
 };
 
 class VariableDefinition: public Node {
@@ -168,7 +166,7 @@ class VariableDefinitions: public Statement {
 		std::pair<Result, Value *> interpret(Context &) override;
 };
 
-class IfStatement: public Node {
+class IfStatement: public Statement {
 	public:
 		std::unique_ptr<Expression> condition;
 		std::unique_ptr<Statement> consequent;
@@ -178,4 +176,22 @@ class IfStatement: public Node {
 
 		NodeType getType() const override { return NodeType::IfStatement; }
 		std::pair<Result, Value *> interpret(Context &) override;
+};
+
+class Identifier: public Expression {
+	public:
+		std::string name;
+
+		Identifier(const ASTNode &);
+
+		Value * evaluate(Context &) override;
+};
+
+struct NumberLiteral: public Expression {
+	public:
+		double value;
+
+		NumberLiteral(const ASTNode &node);
+
+		Value * evaluate(Context &) override;
 };

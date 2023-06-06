@@ -45,6 +45,7 @@ struct JSError: public std::runtime_error {
 class Context {
 	public:
 		std::unordered_set<Value *> valuePool;
+		std::unordered_map<std::string, Value *> globals;
 		ScopeStack stack;
 		size_t lineNumber = 0;
 		size_t columnNumber = 0;
@@ -65,5 +66,13 @@ class Context {
 
 		inline auto writeMember() {
 			return FieldSaver(*this, &Context::writingMember);
+		}
+
+		inline void addGlobal(const std::string &name, Value *value) {
+			if (globals.contains(name))
+				throw std::runtime_error("Context already contains global \"" + name + '"');
+
+			globals.emplace(name, value);
+			valuePool.insert(value);
 		}
 };
