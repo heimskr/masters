@@ -21,7 +21,7 @@ int main(int, char **) {
 		assert(jsParser.root != nullptr);
 		Program program(*jsParser.root);
 		Context context;
-		context.makeGlobal<Function>("print", [](Context &context, const std::vector<Value *> &arguments) {
+		context.makeGlobal<Function>("print", [](Context &context, const std::vector<Value *> &arguments, Value *) {
 			for (Value *value: arguments)
 				std::cout << static_cast<std::string>(*value) << std::endl;
 			return context.makeValue<Undefined>();

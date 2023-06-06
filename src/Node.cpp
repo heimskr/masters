@@ -524,7 +524,7 @@ Value * FunctionCall::evaluate(Context &context) {
 	for (const auto &argument: arguments)
 		argument_values.emplace_back(argument->evaluate(context));
 
-	return cast_function.function(context, argument_values);
+	return cast_function.function(context, argument_values, cast_function.thisObj);
 }
 
 FunctionExpression::FunctionExpression(const ASTNode &node):
@@ -537,7 +537,7 @@ body(std::make_unique<Block>(*node.at(1))) {
 Value * FunctionExpression::evaluate(Context &context) {
 	Value **this_obj = context.stack.lookup("this");
 
-	return context.makeValue<Function>([this](Context &context, const std::vector<Value *> &argument_values) -> Value * {
+	return context.makeValue<Function>([this](Context &context, const std::vector<Value *> &argument_values, Value *this_obj) {
 		context.stack.push();
 
 		size_t i = 0;
@@ -549,6 +549,7 @@ Value * FunctionExpression::evaluate(Context &context) {
 			context.stack.insert(arguments.at(i)->name, context.makeValue<Undefined>());
 
 		context.stack.insert("arguments", context.makeValue<Array>(argument_values));
+		context.stack.insert("this", this_obj);
 
 		const auto [result, value] = body->interpret(context);
 
