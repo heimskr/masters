@@ -54,6 +54,10 @@ const char * stringify(NodeType type) {
 	}
 }
 
+//
+// Node
+//
+
 void Node::assertType(NodeType type) {
 	if (getType() != type)
 		throw std::runtime_error("Assertion failed: " + std::string(typeid(*this).name()) + " at [" +
@@ -67,6 +71,10 @@ std::unique_ptr<Node> Node::fromAST(const ASTNode &node) {
 void Node::absorbPosition(const ASTNode &node) {
 	location = node.location;
 }
+
+//
+// Program
+//
 
 Program::Program(const ASTNode &node) {
 	absorbPosition(node);
@@ -95,6 +103,10 @@ std::pair<Result, Value *> Program::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
+//
+// Block
+//
+
 Block::Block(const ASTNode &node) {
 	absorbPosition(node);
 
@@ -122,10 +134,9 @@ void Block::findVariables(std::vector<VariableUsage> &usages) const {
 		node->findVariables(usages);
 }
 
-// void Block::findKilledVariables(std::unordered_set<std::string> &killed) const {
-// 	for (const auto &node: body)
-// 		node->findKilledVariables(killed);
-// }
+//
+// VariableDefinition
+//
 
 VariableDefinition::VariableDefinition(const ASTNode &node):
 	ident(*node.text),
@@ -139,9 +150,9 @@ void VariableDefinition::findVariables(std::vector<VariableUsage> &usages) const
 	usages.emplace_back(true, ident);
 }
 
-// void VariableDefinition::findKilledVariables(std::unordered_set<std::string> &killed) const {
-// 	killed.insert(ident);
-// }
+//
+// VariableDefinitions
+//
 
 VariableDefinitions::VariableDefinitions(const ASTNode &node): kind(getKind(node.at(0)->symbol)) {
 	absorbPosition(node);
@@ -173,10 +184,9 @@ void VariableDefinitions::findVariables(std::vector<VariableUsage> &usages) cons
 		definition->findVariables(usages);
 }
 
-// void VariableDefinitions::findKilledVariables(std::unordered_set<std::string> &killed) const {
-// 	for (const auto &definition: definitions)
-// 		definition->findKilledVariables(killed);
-// }
+//
+// IfStatement
+//
 
 IfStatement::IfStatement(const ASTNode &node):
 	condition(Expression::create(*node.at(0))),
@@ -195,6 +205,10 @@ void IfStatement::findVariables(std::vector<VariableUsage> &usages) const {
 	assert(condition);
 	condition->findVariables(usages);
 }
+
+//
+// WhileLoop
+//
 
 WhileLoop::WhileLoop(const ASTNode &node):
 	condition(Expression::create(*node.at(0))),
@@ -219,13 +233,25 @@ void WhileLoop::findVariables(std::vector<VariableUsage> &usages) const {
 	condition->findVariables(usages);
 }
 
+//
+// Continue
+//
+
 std::pair<Result, Value *> Continue::interpret(Context &) {
 	return {Result::Continue, nullptr};
 }
 
+//
+// Break
+//
+
 std::pair<Result, Value *> Break::interpret(Context &) {
 	return {Result::Break, nullptr};
 }
+
+//
+// Return
+//
 
 Return::Return(const ASTNode &node):
 	returnValue(node.empty()? nullptr : Expression::create(*node.front())) { absorbPosition(node); }
@@ -241,9 +267,17 @@ void Return::findVariables(std::vector<VariableUsage> &usages) const {
 		returnValue->findVariables(usages);
 }
 
+//
+// Expression
+//
+
 std::pair<Result, Value *> Expression::interpret(Context &context) {
 	return {Result::None, evaluate(context)};
 }
+
+//
+// BinaryExpression
+//
 
 BinaryExpression::BinaryExpression(const ASTNode &node):
 	type(getType(node.symbol)),
@@ -422,6 +456,10 @@ void BinaryExpression::findVariables(std::vector<VariableUsage> &usages) const {
 	right->findVariables(usages);
 }
 
+//
+// UnaryExpression
+//
+
 UnaryExpression::UnaryExpression(const ASTNode &node):
 	type(getType(node.symbol)),
 	subexpr(Expression::create(*node.front())) { absorbPosition(node); }
@@ -490,6 +528,10 @@ void UnaryExpression::findVariables(std::vector<VariableUsage> &usages) const {
 	subexpr->findVariables(usages);
 }
 
+//
+// Expression
+//
+
 std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 	switch (node.symbol) {
 		case JSTOK_TEQ:
@@ -543,11 +585,18 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_PERIOD:
 			return std::make_unique<DotExpression>(node);
 
+		case JS_ARRAY:
+			return std::make_unique<ArrayExpression>(node);
+
 		default:
 			node.debug();
 			throw std::invalid_argument("Unhandled symbol in Expression::create: " + std::string(node.getName()));
 	}
 }
+
+//
+// Statement
+//
 
 std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 	switch (node.symbol) {
@@ -575,8 +624,11 @@ std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 			node.debug();
 			throw std::invalid_argument("Unhandled symbol in Statement::create: " + std::string(node.getName()));
 	}
-
 }
+
+//
+// Identifier
+//
 
 Identifier::Identifier(const ASTNode &node): name(*node.text) {
 	absorbPosition(node);
@@ -595,6 +647,10 @@ void Identifier::findVariables(std::vector<VariableUsage> &usages) const {
 	usages.emplace_back(false, name);
 }
 
+//
+// NumberLiteral
+//
+
 NumberLiteral::NumberLiteral(const ASTNode &node): value(parseDouble(*node.text)) {
 	absorbPosition(node);
 }
@@ -602,6 +658,10 @@ NumberLiteral::NumberLiteral(const ASTNode &node): value(parseDouble(*node.text)
 Value * NumberLiteral::evaluate(Context &context) {
 	return context.makeValue<Number>(value);
 }
+
+//
+// StringLiteral
+//
 
 StringLiteral::StringLiteral(const ASTNode &node): value(node.unquote()) {
 	absorbPosition(node);
@@ -611,6 +671,10 @@ Value * StringLiteral::evaluate(Context &context) {
 	return context.makeValue<String>(value);
 }
 
+//
+// BooleanLiteral
+//
+
 BooleanLiteral::BooleanLiteral(const ASTNode &node): value(node.symbol == JSTOK_TRUE) {
 	absorbPosition(node);
 }
@@ -618,6 +682,10 @@ BooleanLiteral::BooleanLiteral(const ASTNode &node): value(node.symbol == JSTOK_
 Value * BooleanLiteral::evaluate(Context &context) {
 	return context.makeValue<Boolean>(value);
 }
+
+//
+// FunctionCall
+//
 
 FunctionCall::FunctionCall(const ASTNode &node): function(Expression::create(*node.front())) {
 	for (const auto *subnode: *node.at(1))
@@ -650,6 +718,10 @@ void FunctionCall::findVariables(std::vector<VariableUsage> &usages) const {
 	for (const auto &argument: arguments)
 		argument->findVariables(usages);
 }
+
+//
+// FunctionExpression
+//
 
 FunctionExpression::FunctionExpression(const ASTNode &node):
 name(2 < node.size()? *node.at(2)->text : ""),
@@ -721,6 +793,10 @@ std::unordered_set<Value *> FunctionExpression::assembleClosure(Context &context
 	return closure;
 }
 
+//
+// ObjectExpression
+//
+
 ObjectExpression::ObjectExpression(const ASTNode &node) {
 	if (!node.empty())
 		for (const auto &subnode: *node.front())
@@ -740,6 +816,53 @@ void ObjectExpression::findVariables(std::vector<VariableUsage> &usages) const {
 	for (const auto &[key, expression]: map)
 		expression->findVariables(usages);
 }
+
+//
+// ArrayExpression
+//
+
+ArrayExpression::ArrayExpression(const ASTNode &node) {
+	if (!node.empty()) {
+		for (const auto &subnode: *node.front()) {
+			if (subnode->symbol == JS_EMPTY) {
+				isHoley = true;
+				expressions.emplace_back(nullptr);
+			} else {
+				expressions.push_back(Expression::create(*subnode));
+			}
+		}
+	}
+}
+
+Value * ArrayExpression::evaluate(Context &context) {
+	if (isHoley) {
+		std::map<size_t, Value *> map;
+		size_t i = 0;
+		for (const auto &expression: expressions) {
+			if (expression)
+				map[i] = expression->evaluate(context);
+			++i;
+		}
+		return context.makeValue<Array>(std::move(map));
+	}
+
+	std::vector<Value *> values;
+	for (const auto &expression: expressions) {
+		assert(expression);
+		values.push_back(expression->evaluate(context));
+	}
+	return context.makeValue<Array>(std::move(values));
+}
+
+void ArrayExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	for (const auto &expression: expressions)
+		if (expression)
+			expression->findVariables(usages);
+}
+
+//
+// DotExpression
+//
 
 DotExpression::DotExpression(const ASTNode &node):
 	base(Expression::create(*node.at(0))),

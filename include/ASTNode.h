@@ -70,7 +70,8 @@ class ASTNode {
 		std::string unquote(bool unescape = true) const;
 		char getChar() const;
 		const char * getName() const;
-		void debug(int indent = 0, bool is_last = false, bool suppress_line = false) const;
+		void debug(int indent, bool is_last = false, bool suppress_line = false) const;
+		void debug() const { debug(0, false, false); }
 		virtual std::string debugExtra() const;
 		virtual std::string style() const;
 		std::string extractName() const;

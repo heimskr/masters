@@ -6,6 +6,7 @@
 #include <map>
 #include <string>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 class Context;
@@ -110,17 +111,26 @@ class Object: public Value {
 
 class Array: public Value {
 	public:
-		std::vector<Value *> values;
-		// std::map<std::string, Value *> map;
-		Array() = default;
-		Array(std::vector<Value *> values_): values(std::move(values_)) {}
+		using Holeless = std::vector<Value *>;
+		using Holey    = std::map<size_t, Value *>;
+		using Values   = std::variant<Holeless, Holey>;
+
+		Values values;
+
+		Array(): values(Holeless{}) {}
+		Array(Values values_): values(std::move(values_)) {}
 		ValueType getType() const override { return ValueType::Array; }
-		std::unordered_set<Value *> getReferents() const override { return {values.begin(), values.end()}; }
+		std::unordered_set<Value *> getReferents() const override;
 		Number * toNumber() const override;
 		std::string getName() const override { return "Array"; }
 		explicit operator std::string() const override;
 		explicit operator double() const override;
 		explicit operator bool() const override { return true; }
+		inline bool isHoley() const { return std::holds_alternative<Holey>(values); }
+		/** Will return nullptr for out-of-range accesses. */
+		Value * operator[](size_t) const;
+		size_t size() const;
+		bool empty() const;
 		VALUE_OPERATOR_OVERRIDES
 		VALUE_USING
 };

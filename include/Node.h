@@ -23,7 +23,7 @@ DeclarationKind getKind(int symbol);
 enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
 	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return, ObjectExpression,
-	DotExpression, NumberLiteral, StringLiteral, BooleanLiteral,
+	DotExpression, NumberLiteral, StringLiteral, BooleanLiteral, ArrayExpression,
 };
 
 struct VariableUsage {
@@ -316,9 +316,24 @@ class ObjectExpression: public Expression {
 
 		ObjectExpression(const ASTNode &);
 
-		NodeType getType() const override { return NodeType::DotExpression; }
+		NodeType getType() const override { return NodeType::ObjectExpression; }
 		Value * evaluate(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override;
+};
+
+class ArrayExpression: public Expression {
+	public:
+		/** An expression here can be null to represent a hole in the array. */
+		std::vector<std::unique_ptr<Expression>> expressions;
+
+		ArrayExpression(const ASTNode &);
+
+		NodeType getType() const override { return NodeType::ArrayExpression; }
+		Value * evaluate(Context &) override;
+		void findVariables(std::vector<VariableUsage> &) const override;
+
+	private:
+		bool isHoley = false;
 };
 
 class DotExpression: public Expression {

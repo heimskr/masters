@@ -24,22 +24,39 @@ std::unordered_set<Value *> Object::getReferents() const {
 Array::operator std::string() const {
 	std::ostringstream oss;
 	bool first = true;
-	for (const Value *value: values) {
-		if (first)
-			first = false;
-		else
-			oss << ',';
-		oss << std::string(*value);
+
+	if (isHoley()) {
+		for (const auto &[key, value]: std::get<Holey>(values)) {
+			if (first)
+				first = false;
+			else
+				oss << ',';
+			if (value != nullptr)
+				oss << static_cast<std::string>(*value);
+		}
+	} else {
+		for (const Value *value: std::get<Holeless>(values)) {
+			if (first)
+				first = false;
+			else
+				oss << ',';
+			assert(value != nullptr);
+			oss << static_cast<std::string>(*value);
+		}
 	}
+
 	return oss.str();
 }
 
 Array::operator double() const {
-	if (values.empty())
+	if (empty())
 		return 0;
 
-	if (values.size() == 1)
-		return static_cast<double>(*values.front());
+	if (!isHoley()) {
+		Value *first = (*this)[0];
+		assert(first);
+		return static_cast<double>(*first);
+	}
 
 	return nan("");
 }
@@ -56,9 +73,59 @@ Number * Object::toNumber() const {
 	return make<Number>(*this, nan(""));
 }
 
+std::unordered_set<Value *> Array::getReferents() const {
+	if (!isHoley()) {
+		const auto &holeless = std::get<Holeless>(values);
+		return {holeless.begin(), holeless.end()};
+	}
+
+	std::unordered_set<Value *> out;
+	for (const auto &[key, value]: std::get<Holey>(values))
+		out.insert(value);
+	return out;
+}
+
 Number * Array::toNumber() const {
-	// Not quite correct. Number([[[[[4]]]]]) evaluates to 4.
+	if (isHoley()) {
+		const auto &holey = std::get<Holey>(values);
+		if (holey.size() == 1) {
+			const auto &[key, value] = *holey.begin();
+			if (key == 0)
+				return value->toNumber();
+		}
+	} else {
+		const auto &holeless = std::get<Holeless>(values);
+		if (holeless.size() == 1)
+			return holeless.front()->toNumber();
+	}
+
 	return make<Number>(*this, nan(""));
+}
+
+Value * Array::operator[](size_t index) const {
+	if (isHoley()) {
+		const auto &holey = std::get<Holey>(values);
+		if (auto iter = holey.find(index); iter != holey.end())
+			return iter->second;
+	} else {
+		const auto &holeless = std::get<Holeless>(values);
+		if (index < holeless.size())
+			return holeless.at(index);
+	}
+
+	return nullptr;
+}
+
+size_t Array::size() const {
+	if (isHoley())
+		return std::get<Holey>(values).size();
+	return std::get<Holeless>(values).size();
+}
+
+bool Array::empty() const {
+	if (isHoley())
+		return std::get<Holey>(values).empty();
+	return std::get<Holeless>(values).empty();
 }
 
 Number * Number::toNumber() const {
