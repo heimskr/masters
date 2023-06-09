@@ -297,6 +297,7 @@ array: "[" "]" { $$ = $1; $$->symbol = JS_ARRAY; D($2); }
      | "[" array_list "]" { $$ = $1->adopt($2); $$->symbol = JS_ARRAY; D($3); }
 
 array_list: expr { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); }
+          | { $$ = (new ASTNode(jsParser, JS_LIST))->adopt(new ASTNode(jsParser, JS_EMPTY)); }
           | array_list "," expr_ { $$ = $1->adopt($3); D($2); };
 
 %%

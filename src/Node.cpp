@@ -853,7 +853,7 @@ Value * ArrayExpression::evaluate(Context &context) {
 				map[i] = expression->evaluate(context);
 			++i;
 		}
-		return context.makeValue<Array>(std::move(map));
+		return context.makeValue<Array>(std::move(map), i);
 	}
 
 	std::vector<Value *> values;

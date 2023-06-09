@@ -105,9 +105,11 @@ class Array: public Value {
 		using Values   = std::variant<Holeless, Holey>;
 
 		Values values;
+		size_t holeyLength = -1;
 
 		Array(): values(Holeless{}) {}
-		Array(Values values_): values(std::move(values_)) {}
+		Array(Holeless values_): values(std::move(values_)) {}
+		Array(Holey values_, size_t holey_length): values(std::move(values_)), holeyLength(holey_length) {}
 		Value * copy() const override;
 		ValueType getType() const override { return ValueType::Array; }
 		std::unordered_set<Value *> getReferents() const override;
