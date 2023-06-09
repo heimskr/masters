@@ -25,6 +25,9 @@ class Value {
 		Context *context = nullptr;
 		virtual ~Value() = default;
 		virtual ValueType getType() const = 0;
+		virtual const Value * ultimateValue() const { return this; }
+		virtual Value * ultimateValue() { return this; }
+		virtual ValueType ultimateType() const { return getType(); }
 		virtual std::unordered_set<Value *> getReferents() const { return {}; }
 		virtual Number * toNumber() const {
 			throw std::runtime_error("Cannot convert value of type " + getName() + " to a number");
@@ -167,15 +170,19 @@ class String: public Value {
 
 class Reference: public Value {
 	public:
-		Value *referent;
+		Value **referent;
+		Reference(Value **referent_): referent(referent_) {}
 		ValueType getType() const override { return ValueType::Reference; }
-		Reference(Value *referent_): referent(referent_) {}
-		std::unordered_set<Value *> getReferents() const override { assert(referent); return {referent}; }
-		Number * toNumber() const override { assert(referent); return referent->toNumber(); }
-		std::string getName() const override { return "Reference[" + referent->getName() + ']'; }
-		explicit operator std::string() const override { assert(referent); return static_cast<std::string>(*referent); }
-		explicit operator double()      const override { assert(referent); return static_cast<double>(*referent);      }
-		explicit operator bool()        const override { assert(referent); return static_cast<bool>(*referent);        }
+		const Value * ultimateValue() const override { assertReferent(); return (*referent)->ultimateValue(); }
+		Value * ultimateValue() override { assertReferent(); return (*referent)->ultimateValue(); }
+		ValueType ultimateType() const override;
+		void assertReferent() const { assert(referent != nullptr); assert(*referent != nullptr); }
+		std::unordered_set<Value *> getReferents() const override;
+		Number * toNumber() const override { assertReferent(); return (*referent)->toNumber(); }
+		std::string getName() const override { assertReferent(); return "Reference[" + (*referent)->getName() + ']'; }
+		explicit operator std::string() const override;
+		explicit operator double()      const override;
+		explicit operator bool()        const override;
 		// Alas.
 		Value * operator+(const Value &)  const override;
 		Value * operator-(const Value &)  const override;

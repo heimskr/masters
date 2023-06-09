@@ -1,4 +1,5 @@
 #include <cassert>
+#include <csignal>
 #include <cmath>
 #include <iostream>
 
@@ -128,7 +129,7 @@ void Block::findVariables(std::vector<VariableUsage> &usages) const {
 
 VariableDefinition::VariableDefinition(const ASTNode &node):
 	ident(*node.text),
-	value(node.empty()? nullptr : Expression::create(*node.front())) {}
+	value(node.empty()? nullptr : Expression::create(*node.front())) { absorbPosition(node); }
 
 std::pair<Result, Value *> VariableDefinition::interpret(Context &) {
 	throw std::logic_error("Unimplemented");
@@ -180,7 +181,7 @@ void VariableDefinitions::findVariables(std::vector<VariableUsage> &usages) cons
 IfStatement::IfStatement(const ASTNode &node):
 	condition(Expression::create(*node.at(0))),
 	consequent(Statement::create(*node.at(1))),
-	alternate(2 < node.size()? Statement::create(*node.at(2)) : nullptr) {}
+	alternate(2 < node.size()? Statement::create(*node.at(2)) : nullptr) { absorbPosition(node); }
 
 std::pair<Result, Value *> IfStatement::interpret(Context &context) {
 	if (*condition->evaluate(context))
@@ -197,7 +198,7 @@ void IfStatement::findVariables(std::vector<VariableUsage> &usages) const {
 
 WhileLoop::WhileLoop(const ASTNode &node):
 	condition(Expression::create(*node.at(0))),
-	body(Statement::create(*node.at(1))) {}
+	body(Statement::create(*node.at(1))) { absorbPosition(node); }
 
 std::pair<Result, Value *> WhileLoop::interpret(Context &context) {
 	while (condition->evaluate(context)) {
@@ -227,7 +228,7 @@ std::pair<Result, Value *> Break::interpret(Context &) {
 }
 
 Return::Return(const ASTNode &node):
-	returnValue(node.empty()? nullptr : Expression::create(*node.front())) {}
+	returnValue(node.empty()? nullptr : Expression::create(*node.front())) { absorbPosition(node); }
 
 std::pair<Result, Value *> Return::interpret(Context &context) {
 	if (returnValue)
@@ -247,7 +248,7 @@ std::pair<Result, Value *> Expression::interpret(Context &context) {
 BinaryExpression::BinaryExpression(const ASTNode &node):
 	type(getType(node.symbol)),
 	left(Expression::create(*node.at(0))),
-	right(Expression::create(*node.at(1))) {}
+	right(Expression::create(*node.at(1))) { absorbPosition(node); }
 
 Value * BinaryExpression::evaluate(Context &context) {
 	switch (type) {
@@ -373,7 +374,7 @@ void BinaryExpression::findVariables(std::vector<VariableUsage> &usages) const {
 
 UnaryExpression::UnaryExpression(const ASTNode &node):
 	type(getType(node.symbol)),
-	subexpr(Expression::create(*node.front())) {}
+	subexpr(Expression::create(*node.front())) { absorbPosition(node); }
 
 Value * UnaryExpression::evaluate(Context &context) {
 	switch (type) {
@@ -488,6 +489,9 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JS_OBJECT:
 			return std::make_unique<ObjectExpression>(node);
 
+		case JSTOK_PERIOD:
+			return std::make_unique<DotExpression>(node);
+
 		default:
 			node.debug();
 			throw std::invalid_argument("Unhandled symbol in Expression::create: " + std::string(node.getName()));
@@ -528,7 +532,7 @@ Identifier::Identifier(const ASTNode &node): name(*node.text) {
 
 Value * Identifier::evaluate(Context &context) {
 	if (Value **result = context.stack.lookup(name))
-		return *(referenced = result);
+		return context.makeValue<Reference>(result);
 
 	throw ReferenceError(name, location);
 }
@@ -572,10 +576,10 @@ Value * FunctionCall::evaluate(Context &context) {
 	Value *evaluated_function = function->evaluate(context);
 	assert(evaluated_function != nullptr);
 
-	if (evaluated_function->getType() != ValueType::Function)
+	if (evaluated_function->ultimateType() != ValueType::Function)
 		throw TypeError('"' + static_cast<std::string>(*evaluated_function) + "\" is not a function");
 
-	auto &cast_function = dynamic_cast<Function &>(*evaluated_function);
+	auto &cast_function = dynamic_cast<Function &>(*evaluated_function->ultimateValue());
 
 	std::vector<Value *> argument_values;
 	argument_values.reserve(arguments.size());
@@ -601,7 +605,12 @@ body(std::make_unique<Block>(*node.at(1))) {
 }
 
 Value * FunctionExpression::evaluate(Context &context) {
-	Value **this_obj = context.stack.lookup("this");
+	Value **this_obj = nullptr;
+
+	if (context.nextThis != nullptr)
+		this_obj = &context.nextThis;
+	else
+	 	context.stack.lookup("this");
 
 	return context.makeValue<Function>([this](Context &context, const std::vector<Value *> &argument_values, Value *this_obj) {
 		context.stack.push();
@@ -666,6 +675,8 @@ ObjectExpression::ObjectExpression(const ASTNode &node) {
 
 Value * ObjectExpression::evaluate(Context &context) {
 	auto *out = context.makeValue<Object>();
+	FieldSaver saver(context, &Context::nextThis);
+	context.nextThis = out;
 	for (const auto &[key, expression]: map)
 		out->map[key] = expression->evaluate(context);
 	return out;
@@ -674,4 +685,27 @@ Value * ObjectExpression::evaluate(Context &context) {
 void ObjectExpression::findVariables(std::vector<VariableUsage> &usages) const {
 	for (const auto &[key, expression]: map)
 		expression->findVariables(usages);
+}
+
+DotExpression::DotExpression(const ASTNode &node):
+	base(Expression::create(*node.at(0))),
+	ident(*node.at(1)->text) { absorbPosition(node); }
+
+Value * DotExpression::evaluate(Context &context) {
+	auto *lhs = base->evaluate(context);
+	// TODO: update when boxing support is added
+	if (lhs->ultimateType() != ValueType::Object)
+		throw TypeError("Can't use . operator on non-object", location);
+
+	auto *object = dynamic_cast<Object *>(lhs->ultimateValue());
+
+	if (auto iter = object->map.find(ident); iter != object->map.end())
+		return context.makeValue<Reference>(&iter->second);
+
+	return context.makeValue<Undefined>();
+}
+
+void DotExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	assert(base != nullptr);
+	base->findVariables(usages);
 }

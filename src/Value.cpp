@@ -220,104 +220,129 @@ Value * Array::operator==(const Value &right) const {
 	return make<Boolean>(*this, this == &right);
 }
 
+ValueType Reference::ultimateType() const {
+	assertReferent();
+	return (*referent)->ultimateType();
+}
+
+std::unordered_set<Value *> Reference::getReferents() const {
+	assertReferent();
+	return {*referent};
+}
+
+Reference::operator std::string() const {
+	assertReferent();
+	return static_cast<std::string>(**referent);
+}
+
+Reference::operator double() const {
+	assertReferent();
+	return static_cast<double>(**referent);
+}
+
+Reference::operator bool() const {
+	assertReferent();
+	return static_cast<bool>(**referent);
+}
+
 Value * Reference::operator+(const Value &other) const {
-	assert(referent);
-	return *referent + other;
+	assertReferent();
+	return **referent + other;
 }
 
 Value * Reference::operator-(const Value &other) const {
-	assert(referent);
-	return *referent - other;
+	assertReferent();
+	return **referent - other;
 }
 
 Value * Reference::operator*(const Value &other) const {
-	assert(referent);
-	return *referent * other;
+	assertReferent();
+	return **referent * other;
 }
 
 Value * Reference::operator/(const Value &other) const {
-	assert(referent);
-	return *referent / other;
+	assertReferent();
+	return **referent / other;
 }
 
 Value * Reference::operator%(const Value &other) const {
-	assert(referent);
-	return *referent % other;
+	assertReferent();
+	return **referent % other;
 }
 
 Value * Reference::operator&(const Value &other) const {
-	assert(referent);
-	return *referent & other;
+	assertReferent();
+	return **referent & other;
 }
 
 Value * Reference::operator|(const Value &other) const {
-	assert(referent);
-	return *referent | other;
+	assertReferent();
+	return **referent | other;
 }
 
 Value * Reference::operator^(const Value &other) const {
-	assert(referent);
-	return *referent ^ other;
+	assertReferent();
+	return **referent ^ other;
 }
 
 Value * Reference::operator==(const Value &other) const {
-	assert(referent);
-	return *referent == other;
+	assertReferent();
+	return **referent == other;
 }
 
 Value * Reference::operator!=(const Value &other) const {
-	assert(referent);
-	return *referent != other;
+	assertReferent();
+	return **referent != other;
 }
 
 Value * Reference::operator<(const Value &other) const {
-	assert(referent);
-	return *referent < other;
+	assertReferent();
+	return **referent < other;
 }
 
 Value * Reference::operator>(const Value &other) const {
-	assert(referent);
-	return *referent > other;
+	assertReferent();
+	return **referent > other;
 }
 
 Value * Reference::operator<=(const Value &other) const {
-	assert(referent);
-	return *referent <= other;
+	assertReferent();
+	return **referent <= other;
 }
 
 Value * Reference::operator>=(const Value &other) const {
-	assert(referent);
-	return *referent >= other;
+	assertReferent();
+	return **referent >= other;
 }
 
 Value * Reference::power(const Value &other) const {
-	assert(referent);
-	return referent->power(other);
+	assertReferent();
+	return (*referent)->power(other);
 }
 
 Value * Reference::operator&&(const Value &other) const {
-	assert(referent);
-	return *referent && other;
+	assertReferent();
+	return **referent && other;
 }
 
 Value * Reference::operator||(const Value &other) const {
-	assert(referent);
-	return *referent || other;
+	assertReferent();
+	return **referent || other;
 }
 
 Value * Reference::operator<<(const Value &other) const {
-	assert(referent);
-	return *referent << other;
+	assertReferent();
+	return **referent << other;
 }
 
 Value * Reference::shiftRightLogical(const Value &other) const {
-	assert(referent);
-	return referent->shiftRightLogical(other);
+	assertReferent();
+	return (*referent)->shiftRightLogical(other);
 }
 
 Value * Reference::shiftRightArithmetic(const Value &other) const {
-	assert(referent);
-	return referent->shiftRightArithmetic(other);
+	assertReferent();
+	return (*referent)->shiftRightArithmetic(other);
 }
 
 Function::Function(FunctionType function_, Value *this_obj, std::unordered_set<Value *> closure_):

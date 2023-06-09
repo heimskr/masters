@@ -22,7 +22,8 @@ DeclarationKind getKind(int symbol);
 
 enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
-	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return, Object,
+	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return, ObjectExpression,
+	DotExpression, NumberLiteral, StringLiteral, BooleanLiteral,
 };
 
 struct VariableUsage {
@@ -269,31 +270,34 @@ class Return: public Statement {
 		void findVariables(std::vector<VariableUsage> &) const override;
 };
 
-struct NumberLiteral: public Expression {
+class NumberLiteral: public Expression {
 	public:
 		double value;
 		NumberLiteral(const ASTNode &node);
+		NodeType getType() const override { return NodeType::NumberLiteral; }
 		Value * evaluate(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override {}
 };
 
-struct StringLiteral: public Expression {
+class StringLiteral: public Expression {
 	public:
 		std::string value;
 		StringLiteral(const ASTNode &node);
+		NodeType getType() const override { return NodeType::StringLiteral; }
 		Value * evaluate(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override {}
 };
 
-struct BooleanLiteral: public Expression {
+class BooleanLiteral: public Expression {
 	public:
 		bool value;
 		BooleanLiteral(const ASTNode &node);
+		NodeType getType() const override { return NodeType::BooleanLiteral; }
 		Value * evaluate(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override {}
 };
 
-struct FunctionCall: public Expression {
+class FunctionCall: public Expression {
 	public:
 		std::unique_ptr<Expression> function;
 		std::vector<std::unique_ptr<Expression>> arguments;
@@ -311,7 +315,19 @@ class ObjectExpression: public Expression {
 
 		ObjectExpression(const ASTNode &);
 
-		NodeType getType() const override { return NodeType::Object; }
+		NodeType getType() const override { return NodeType::DotExpression; }
+		Value * evaluate(Context &) override;
+		void findVariables(std::vector<VariableUsage> &) const override;
+};
+
+class DotExpression: public Expression {
+	public:
+		std::unique_ptr<Expression> base;
+		std::string ident;
+
+		DotExpression(const ASTNode &);
+
+		NodeType getType() const override { return NodeType::DotExpression; }
 		Value * evaluate(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override;
 };

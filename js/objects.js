@@ -6,7 +6,7 @@ let obj = {
 		c: 64
 	},
 	d,
-	f: function(x) { return x + this.a; }
+	f: function(x) { return x + this.a + this.d; }
 };
 
-console.log(obj.f(obj.b.c));
+print(obj.f(obj.b.c));

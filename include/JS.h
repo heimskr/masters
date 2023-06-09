@@ -47,6 +47,7 @@ class Context {
 		size_t lineNumber = 0;
 		size_t columnNumber = 0;
 		bool writingMember = false;
+		Value *nextThis = nullptr;
 
 		Context() = default;
 
