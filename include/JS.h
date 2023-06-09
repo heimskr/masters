@@ -52,6 +52,7 @@ class Context {
 
 		Context() = default;
 
+		void addDefaults();
 		void garbageCollect();
 
 		template <typename T, typename... Args>

@@ -1,4 +1,5 @@
 #include <functional>
+#include <iostream>
 
 #include "JS.h"
 #include "Utils.h"
@@ -40,6 +41,16 @@ void ScopeStack::insert(const std::string &name, Value *value, bool is_const) {
 
 bool ScopeStack::inLastScope(const std::string &name) const {
 	return !scopes.empty() && scopes.back().store.contains(name);
+}
+
+void Context::addDefaults() {
+	makeGlobal<Object>("this");
+
+	makeGlobal<Function>("print", [](Context &context, const std::vector<Value *> &arguments, Value *) {
+		for (Value *value: arguments)
+			std::cout << static_cast<std::string>(*value) << std::endl;
+		return context.makeValue<Undefined>();
+	});
 }
 
 void Context::garbageCollect() {
