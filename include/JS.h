@@ -63,8 +63,10 @@ class Context {
 			return new_value;
 		}
 
-		inline auto writeMember() {
-			return FieldSaver(*this, &Context::writingMember);
+		inline auto writeMember(bool new_value = true) {
+			FieldSaver out(*this, &Context::writingMember);
+			writingMember = new_value;
+			return out;
 		}
 
 		inline void addGlobal(const std::string &name, Value *value) {

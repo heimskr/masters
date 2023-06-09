@@ -68,6 +68,9 @@ void Context::garbageCollect() {
 		for (const auto &[name, pair]: scope.store)
 			visit(pair.first);
 
+	for (const auto &value: globalValues)
+		visit(value);
+
 	std::vector<Value *> unmarked;
 
 	for (const auto &value: valuePool)

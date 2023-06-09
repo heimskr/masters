@@ -37,10 +37,27 @@ std::string readFile(const std::string &);
 
 template <typename T, typename M>
 struct FieldSaver {
-	T &object;
+	T *object;
 	M T::*member;
 	M oldValue;
 
-	FieldSaver(T &object_, M T::*member_): object(object_), member(member_), oldValue(object_.*member_) {}
-	~FieldSaver() { object.*member = oldValue; }
+	FieldSaver(T &object_, M T::*member_):
+		object(&object_),
+		member(member_),
+		oldValue(object_.*member_) {}
+
+	FieldSaver(const FieldSaver &) = delete;
+
+	FieldSaver(FieldSaver &&other): object(other.object), member(other.member), oldValue(std::move(other.oldValue)) {
+		other.member = {};
+	}
+
+	FieldSaver & operator=(FieldSaver &&other) {
+		object = other.object;
+		member = other.member;
+		oldValue = std::move(other.oldValue);
+		other.member = {};
+	}
+
+	~FieldSaver() { if (member != nullptr) object->*member = oldValue; }
 };

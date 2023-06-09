@@ -288,23 +288,73 @@ Value * BinaryExpression::evaluate(Context &context) {
 		case Type::Exponentiation:
 			return left->evaluate(context)->power(*right->evaluate(context));
 
+		case Type::Assignment:
+		case Type::AdditionAssignment:
+		case Type::SubtractionAssignment:
+		case Type::MultiplicationAssignment:
+		case Type::DivisionAssignment:
+		case Type::ModuloAssignment:
+		case Type::BitwiseAndAssignment:
+		case Type::BitwiseOrAssignment:
+		case Type::BitwiseXorAssignment:
+		case Type::ExponentiationAssignment:
+		case Type::LogicalAndAssignment:
+		case Type::LogicalOrAssignment:
+		case Type::LeftShiftAssignment:
+		case Type::RightShiftArithmeticAssignment:
+		case Type::RightShiftLogicalAssignment:
+			return evaluateAccess(context);
+
 		default:
 			throw Unimplemented("Can't evaluate BinaryExpression with type " + std::to_string(static_cast<int>(type)) +
 				": unimplemented");
 	}
 }
 
-Value ** BinaryExpression::access(Context &, bool * /*is_const*/) {
-	throw std::logic_error("Unimplemented");
+std::variant<Value **, Value *> BinaryExpression::access(Context &context, bool *is_const) {
+	Value *lhs = left->evaluate(context);
+
+	// TODO: update when boxing support is added
+	if (lhs->getType() != ValueType::Reference && lhs->getType() != ValueType::Object)
+		throw TypeError("Can't assign to field of value of type " + lhs->getName());
+
+	auto *reference =dynamic_cast<Reference *>(lhs);
+
+	if (is_const != nullptr) {
+		if (reference != nullptr)
+			*is_const = reference->isConst;
+		else
+			*is_const = false;
+	}
+
+	// Object is a reference to something that already exists somewhere
+	if (reference != nullptr)
+		return reference->referent;
+
+	// Object is temporary
+	return lhs;
 }
 
 Value * BinaryExpression::evaluateAccess(Context &context) {
 	auto saver = context.writeMember();
 
 	bool is_const = false;
-	Value **accessed = access(context, &is_const);
-	assert(accessed);
-	assert(*accessed);
+
+	Value *temporary = nullptr;
+	Value **accessed = nullptr;
+
+	auto variant = access(context, &is_const);
+
+	if (std::holds_alternative<Value **>(variant)) {
+		accessed = std::get<Value **>(variant);
+	} else {
+		temporary = std::get<Value *>(variant);
+		accessed = &temporary;
+	}
+
+	assert(accessed != nullptr);
+	assert(*accessed != nullptr);
+
 	if (is_const)
 		throw JSError("Can't assign to const variable");
 
@@ -348,19 +398,19 @@ Value * BinaryExpression::evaluateAccess(Context &context) {
 
 BinaryExpression::Type BinaryExpression::getType(int symbol) {
 	switch (symbol) {
-		case JSTOK_TEQ:   return Type::TripleEquals;
-		case JSTOK_NTEQ:  return Type::TripleNotEquals;
-		case JSTOK_PLUS:  return Type::Addition;
-		case JSTOK_MINUS: return Type::Subtraction;
-		case JSTOK_LT:    return Type::LessThan;
-		case JSTOK_LTE:   return Type::LessThanOrEqual;
-		case JSTOK_GT:    return Type::GreaterThan;
-		case JSTOK_GTE:   return Type::GreaterThanOrEqual;
-		case JSTOK_MOD:   return Type::Modulo;
-		case JSTOK_TIMES: return Type::Multiplication;
-		case JSTOK_DIV:   return Type::Division;
-		case JSTOK_EXP:   return Type::Exponentiation;
-
+		case JSTOK_TEQ:    return Type::TripleEquals;
+		case JSTOK_NTEQ:   return Type::TripleNotEquals;
+		case JSTOK_PLUS:   return Type::Addition;
+		case JSTOK_MINUS:  return Type::Subtraction;
+		case JSTOK_LT:     return Type::LessThan;
+		case JSTOK_LTE:    return Type::LessThanOrEqual;
+		case JSTOK_GT:     return Type::GreaterThan;
+		case JSTOK_GTE:    return Type::GreaterThanOrEqual;
+		case JSTOK_MOD:    return Type::Modulo;
+		case JSTOK_TIMES:  return Type::Multiplication;
+		case JSTOK_DIV:    return Type::Division;
+		case JSTOK_EXP:    return Type::Exponentiation;
+		case JSTOK_ASSIGN: return Type::Assignment;
 		default:
 			throw std::invalid_argument("Unknown symbol in BinaryExpression::getType: " +
 				std::string(jsParser.getName(symbol)));
@@ -452,6 +502,7 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_TIMES:
 		case JSTOK_DIV:
 		case JSTOK_EXP:
+		case JSTOK_ASSIGN:
 			return std::make_unique<BinaryExpression>(node);
 
 		case JSTOK_PLUS:
@@ -518,6 +569,7 @@ std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 			return std::make_unique<Block>(node);
 		case JSTOK_LPAREN:
 		case JSTOK_FUNCTION:
+		case JSTOK_ASSIGN:
 			return Expression::create(node);
 		default:
 			node.debug();
@@ -531,8 +583,10 @@ Identifier::Identifier(const ASTNode &node): name(*node.text) {
 }
 
 Value * Identifier::evaluate(Context &context) {
-	if (Value **result = context.stack.lookup(name))
-		return context.makeValue<Reference>(result);
+	bool is_const = false;
+
+	if (Value **result = context.stack.lookup(name, &is_const))
+		return context.makeValue<Reference>(result, is_const);
 
 	throw ReferenceError(name, location);
 }
@@ -702,7 +756,12 @@ Value * DotExpression::evaluate(Context &context) {
 	if (auto iter = object->map.find(ident); iter != object->map.end())
 		return context.makeValue<Reference>(&iter->second);
 
-	return context.makeValue<Undefined>();
+	auto *undefined = context.makeValue<Undefined>();
+
+	if (context.writingMember)
+		return context.makeValue<Reference>(&(object->map[ident] = undefined));
+
+	return undefined;
 }
 
 void DotExpression::findVariables(std::vector<VariableUsage> &usages) const {

@@ -171,7 +171,9 @@ class String: public Value {
 class Reference: public Value {
 	public:
 		Value **referent;
-		Reference(Value **referent_): referent(referent_) {}
+		bool isConst;
+		Reference() = delete;
+		Reference(Value **referent_, bool is_const = false): referent(referent_), isConst(is_const) {}
 		ValueType getType() const override { return ValueType::Reference; }
 		const Value * ultimateValue() const override { assertReferent(); return (*referent)->ultimateValue(); }
 		Value * ultimateValue() override { assertReferent(); return (*referent)->ultimateValue(); }

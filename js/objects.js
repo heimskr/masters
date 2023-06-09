@@ -10,3 +10,4 @@ let obj = {
 };
 
 print(obj.f(obj.b.c));
+this.obj = obj;
