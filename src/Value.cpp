@@ -10,8 +10,6 @@
 template <typename T, typename... Args>
 static T * make(const Value &base, Args &&...args) {
 	assert(base.context != nullptr);
-	// if (base.context == nullptr)
-	// 	return new T(std::forward<Args>(args)...);
 	return base.context->makeValue<T>(std::forward<Args>(args)...);
 }
 
@@ -208,6 +206,16 @@ Number * Undefined::toNumber() const {
 
 Number * Number::toNumber() const {
 	return make<Number>(*this, number);
+}
+
+Number::operator std::string() const {
+	std::string out = std::to_string(number);
+	if (out.find('.') != std::string::npos)
+		while (out.back() == '0')
+			out.pop_back();
+	if (!out.empty() && out.back() == '.')
+		out.pop_back();
+	return out;
 }
 
 Number * Boolean::toNumber() const {

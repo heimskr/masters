@@ -159,7 +159,7 @@ class Number: public Value {
 		ValueType getType() const override { return ValueType::Number; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Number"; }
-		explicit operator std::string() const override { return std::to_string(number); }
+		explicit operator std::string() const override;
 		explicit operator double() const override { return number; }
 		explicit operator bool() const override { return static_cast<bool>(number); }
 		VALUE_OPERATOR_OVERRIDES
