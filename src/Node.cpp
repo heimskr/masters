@@ -576,6 +576,12 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_STRING:
 			return std::make_unique<StringLiteral>(node);
 
+		case JSTOK_UNDEFINED:
+			return std::make_unique<UndefinedLiteral>(node);
+
+		case JSTOK_NULL:
+			return std::make_unique<NullLiteral>(node);
+
 		case JSTOK_LPAREN:
 			return std::make_unique<FunctionCall>(node);
 
@@ -679,6 +685,30 @@ StringLiteral::StringLiteral(const ASTNode &node): value(node.unquote()) {
 
 Value * StringLiteral::evaluate(Context &context) {
 	return context.makeValue<String>(value);
+}
+
+//
+// UndefinedLiteral
+//
+
+UndefinedLiteral::UndefinedLiteral(const ASTNode &node) {
+	absorbPosition(node);
+}
+
+Value * UndefinedLiteral::evaluate(Context &context) {
+	return context.makeValue<Undefined>();
+}
+
+//
+// NullLiteral
+//
+
+NullLiteral::NullLiteral(const ASTNode &node) {
+	absorbPosition(node);
+}
+
+Value * NullLiteral::evaluate(Context &context) {
+	return context.makeValue<Null>();
 }
 
 //

@@ -23,7 +23,8 @@ DeclarationKind getKind(int symbol);
 enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
 	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return, ObjectExpression,
-	DotExpression, NumberLiteral, StringLiteral, BooleanLiteral, ArrayExpression, AccessExpression,
+	DotExpression, NumberLiteral, StringLiteral, BooleanLiteral, ArrayExpression, AccessExpression, UndefinedLiteral,
+	NullLiteral,
 };
 
 struct VariableUsage {
@@ -285,6 +286,22 @@ class StringLiteral: public Expression {
 		std::string value;
 		StringLiteral(const ASTNode &node);
 		NodeType getType() const override { return NodeType::StringLiteral; }
+		Value * evaluate(Context &) override;
+		void findVariables(std::vector<VariableUsage> &) const override {}
+};
+
+class UndefinedLiteral: public Expression {
+	public:
+		UndefinedLiteral(const ASTNode &node);
+		NodeType getType() const override { return NodeType::UndefinedLiteral; }
+		Value * evaluate(Context &) override;
+		void findVariables(std::vector<VariableUsage> &) const override {}
+};
+
+class NullLiteral: public Expression {
+	public:
+		NullLiteral(const ASTNode &node);
+		NodeType getType() const override { return NodeType::NullLiteral; }
 		Value * evaluate(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override {}
 };

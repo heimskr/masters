@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include "JS.h"
+#include "Log.h"
 #include "Utils.h"
 
 Value ** ScopeStack::lookup(const std::string &name, bool *const_out, ssize_t *depth_out) {
@@ -50,6 +51,12 @@ void Context::addDefaults() {
 		for (Value *value: arguments)
 			std::cout << static_cast<std::string>(*value) << std::endl;
 		return context.makeValue<Undefined>();
+	});
+
+	makeGlobal<Function>("gc", [](Context &context, const std::vector<Value *> &, Value *) {
+		const size_t old_size = context.valuePool.size();
+		context.garbageCollect();
+		return context.makeValue<Number>(old_size - context.valuePool.size());
 	});
 }
 
