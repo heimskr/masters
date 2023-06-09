@@ -25,6 +25,7 @@ class Value {
 	public:
 		Context *context = nullptr;
 		virtual ~Value() = default;
+		virtual Value * copy() const = 0;
 		virtual ValueType getType() const = 0;
 		virtual const Value * ultimateValue() const { return this; }
 		virtual Value * ultimateValue() { return this; }
@@ -39,6 +40,7 @@ class Value {
 		virtual explicit operator int64_t()  const { return static_cast<int64_t>(static_cast<double>(*this));  }
 		virtual explicit operator uint64_t() const { return static_cast<uint64_t>(static_cast<double>(*this)); }
 		virtual std::string getName() const = 0;
+		virtual bool subscriptable() const { return false; }
 		virtual Value * operator+(const Value &)  const;
 		virtual Value * operator-(const Value &)  const;
 		virtual Value * operator*(const Value &)  const;
@@ -71,6 +73,7 @@ class Value {
 class Null: public Value {
 	public:
 		Null() = default;
+		Value * copy() const override { return new Null; }
 		ValueType getType() const override { return ValueType::Null; };
 		Number * toNumber() const override;
 		std::string getName() const override { return "Null"; }
@@ -84,27 +87,13 @@ class Null: public Value {
 class Undefined: public Value {
 	public:
 		Undefined() = default;
+		Value * copy() const override { return new Undefined; }
 		ValueType getType() const override { return ValueType::Undefined; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Undefined"; }
 		explicit operator std::string() const override { return "undefined"; }
 		explicit operator double() const override { return nan(""); }
 		explicit operator bool() const override { return false; }
-		VALUE_OPERATOR_OVERRIDES
-		VALUE_USING
-};
-
-class Object: public Value {
-	public:
-		std::map<std::string, Value *> map;
-		Object() = default;
-		ValueType getType() const override { return ValueType::Object; }
-		std::unordered_set<Value *> getReferents() const override;
-		Number * toNumber() const override;
-		std::string getName() const override { return "Object"; }
-		explicit operator std::string() const override { return "[object Object]"; }
-		explicit operator double() const override { return nan(""); }
-		explicit operator bool() const override { return true; }
 		VALUE_OPERATOR_OVERRIDES
 		VALUE_USING
 };
@@ -119,18 +108,43 @@ class Array: public Value {
 
 		Array(): values(Holeless{}) {}
 		Array(Values values_): values(std::move(values_)) {}
+		Value * copy() const override;
 		ValueType getType() const override { return ValueType::Array; }
 		std::unordered_set<Value *> getReferents() const override;
 		Number * toNumber() const override;
 		std::string getName() const override { return "Array"; }
+		bool subscriptable() const override { return true; }
 		explicit operator std::string() const override;
 		explicit operator double() const override;
 		explicit operator bool() const override { return true; }
 		inline bool isHoley() const { return std::holds_alternative<Holey>(values); }
 		/** Will return nullptr for out-of-range accesses. */
 		Value * operator[](size_t) const;
+		/** Will add and return an Undefined value for out-of-range accesses. */
+		Value *& fetchOrMake(size_t);
 		size_t size() const;
 		bool empty() const;
+		VALUE_OPERATOR_OVERRIDES
+		VALUE_USING
+
+	private:
+		void convertToHoley();
+};
+
+class Object: public Value {
+	public:
+		std::map<std::string, Value *> map;
+		Object() = default;
+		Object(const Array &);
+		Value * copy() const override;
+		ValueType getType() const override { return ValueType::Object; }
+		std::unordered_set<Value *> getReferents() const override;
+		Number * toNumber() const override;
+		std::string getName() const override { return "Object"; }
+		bool subscriptable() const override { return true; }
+		explicit operator std::string() const override { return "[object Object]"; }
+		explicit operator double() const override { return nan(""); }
+		explicit operator bool() const override { return true; }
 		VALUE_OPERATOR_OVERRIDES
 		VALUE_USING
 };
@@ -139,6 +153,7 @@ class Number: public Value {
 	public:
 		double number;
 		Number(double number_): number(number_) {}
+		Value * copy() const override { return new Number(number); }
 		ValueType getType() const override { return ValueType::Number; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Number"; }
@@ -153,6 +168,7 @@ class Boolean: public Value {
 	public:
 		bool boolean;
 		Boolean(double boolean_): boolean(boolean_) {}
+		Value * copy() const override { return new Boolean(boolean); }
 		ValueType getType() const override { return ValueType::Boolean; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Boolean"; }
@@ -166,10 +182,12 @@ class Boolean: public Value {
 class String: public Value {
 	public:
 		std::string string;
-		ValueType getType() const override { return ValueType::String; }
 		String(std::string string_): string(std::move(string_)) {}
+		Value * copy() const override { return new String(string); }
+		ValueType getType() const override { return ValueType::String; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "String"; }
+		bool subscriptable() const override { return true; }
 		explicit operator std::string() const override { return string; }
 		explicit operator double() const override;
 		explicit operator bool() const override { return !string.empty(); }
@@ -184,6 +202,8 @@ class Reference: public Value {
 		bool isConst;
 		Reference() = delete;
 		Reference(Value **referent_, bool is_const = false): referent(referent_), isConst(is_const) {}
+		/** Note: this creates a copy of the referred-to value, not of the reference! */
+		Value * copy() const override { assertReferent(); return (*referent)->copy(); }
 		ValueType getType() const override { return ValueType::Reference; }
 		const Value * ultimateValue() const override { assertReferent(); return (*referent)->ultimateValue(); }
 		Value * ultimateValue() override { assertReferent(); return (*referent)->ultimateValue(); }
@@ -192,6 +212,7 @@ class Reference: public Value {
 		std::unordered_set<Value *> getReferents() const override;
 		Number * toNumber() const override { assertReferent(); return (*referent)->toNumber(); }
 		std::string getName() const override { assertReferent(); return "Reference[" + (*referent)->getName() + ']'; }
+		bool subscriptable() const override { assertReferent(); return (*referent)->subscriptable(); }
 		explicit operator std::string() const override;
 		explicit operator double()      const override;
 		explicit operator bool()        const override;
@@ -226,6 +247,8 @@ class Function: public Value {
 		Value *thisObj = nullptr;
 		std::unordered_set<Value *> closure;
 		Function(FunctionType function_ = {}, Value *this_obj = nullptr, std::unordered_set<Value *> closure_ = {});
+		/** This doesn't deep-clone thisObj. */
+		Value * copy() const override { return new Function(function, thisObj, closure); }
 		std::unordered_set<Value *> getReferents() const override;
 		ValueType getType() const override { return ValueType::Function; }
 		Number * toNumber() const override;

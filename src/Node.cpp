@@ -7,6 +7,7 @@
 #include "Errors.h"
 #include "JS.h"
 #include "Lexer.h"
+#include "Log.h"
 #include "Node.h"
 #include "Parser.h"
 #include "Value.h"
@@ -322,6 +323,10 @@ Value * BinaryExpression::evaluate(Context &context) {
 		case Type::Exponentiation:
 			return left->evaluate(context)->power(*right->evaluate(context));
 
+		case Type::Comma:
+			left->evaluate(context);
+			return right->evaluate(context);
+
 		case Type::Assignment:
 		case Type::AdditionAssignment:
 		case Type::SubtractionAssignment:
@@ -445,6 +450,7 @@ BinaryExpression::Type BinaryExpression::getType(int symbol) {
 		case JSTOK_DIV:    return Type::Division;
 		case JSTOK_EXP:    return Type::Exponentiation;
 		case JSTOK_ASSIGN: return Type::Assignment;
+		case JSTOK_COMMA:  return Type::Comma;
 		default:
 			throw std::invalid_argument("Unknown symbol in BinaryExpression::getType: " +
 				std::string(jsParser.getName(symbol)));
@@ -545,6 +551,7 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_DIV:
 		case JSTOK_EXP:
 		case JSTOK_ASSIGN:
+		case JSTOK_COMMA:
 			return std::make_unique<BinaryExpression>(node);
 
 		case JSTOK_PLUS:
@@ -587,6 +594,9 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 
 		case JS_ARRAY:
 			return std::make_unique<ArrayExpression>(node);
+
+		case JSTOK_LSQUARE:
+			return std::make_unique<AccessExpression>(node);
 
 		default:
 			node.debug();
@@ -869,7 +879,13 @@ DotExpression::DotExpression(const ASTNode &node):
 	ident(*node.at(1)->text) { absorbPosition(node); }
 
 Value * DotExpression::evaluate(Context &context) {
-	auto *lhs = base->evaluate(context);
+	Value *lhs = nullptr;
+
+	{
+		auto saver = context.writeMember(false);
+		lhs = base->evaluate(context);
+	}
+
 	// TODO: update when boxing support is added
 	if (lhs->ultimateType() != ValueType::Object)
 		throw TypeError("Can't use . operator on non-object", location);
@@ -890,4 +906,93 @@ Value * DotExpression::evaluate(Context &context) {
 void DotExpression::findVariables(std::vector<VariableUsage> &usages) const {
 	assert(base != nullptr);
 	base->findVariables(usages);
+}
+
+
+//
+// AccessExpression
+//
+
+AccessExpression::AccessExpression(const ASTNode &node):
+	base(Expression::create(*node.at(0))),
+	subscript(Expression::create(*node.at(1))) { absorbPosition(node); }
+
+Value * AccessExpression::evaluate(Context &context) {
+	Value *lhs = nullptr;
+	Value *rhs = nullptr;
+
+	{
+		auto saver = context.writeMember(false);
+		lhs = base->evaluate(context);
+		assert(lhs != nullptr);
+	}
+
+	if (!lhs->subscriptable())
+		throw TypeError("Can't use [] operator on non-object/array/string (" + lhs->getName() + ')', location);
+
+	{
+		auto saver = context.writeMember(false);
+		rhs = subscript->evaluate(context);
+		assert(rhs != nullptr);
+	}
+
+	switch (lhs->ultimateType()) {
+		case ValueType::Object: {
+			auto *object = dynamic_cast<Object *>(lhs->ultimateValue());
+			const auto stringified = static_cast<std::string>(*rhs);
+
+			if (auto iter = object->map.find(stringified); iter != object->map.end())
+				return context.makeValue<Reference>(&iter->second);
+
+			auto *undefined = context.makeValue<Undefined>();
+
+			if (context.writingMember)
+				return context.makeValue<Reference>(&(object->map[stringified] = undefined));
+
+			return undefined;
+		}
+
+		case ValueType::Array: {
+			auto *reference = dynamic_cast<Reference *>(lhs);
+			auto &array = dynamic_cast<Array &>(*lhs->ultimateValue());
+
+			if (reference == nullptr)
+				return context.makeValue<Undefined>();
+
+			bool is_int = false;
+			size_t index = -1;
+
+			if (rhs->ultimateType() == ValueType::Number) {
+				double number = static_cast<double>(*rhs->ultimateValue());
+				double intpart = 0.;
+				if (modf(number, &intpart) == 0) {
+					is_int = true;
+					index = static_cast<size_t>(intpart);
+				}
+			}
+
+			if (!is_int) {
+				const auto stringified = static_cast<std::string>(*rhs);
+				*reference->referent = context.makeValue<Object>(array);
+			} else if (context.writingMember) {
+				return context.makeValue<Reference>(&array.fetchOrMake(index));
+			} else {
+				if (auto *fetched = array[index])
+					return fetched;
+				return context.makeValue<Undefined>();
+			}
+
+			return *reference->referent;
+		}
+
+		default:
+			throw TypeError("Can't use [] operator on unsupported value (" + rhs->getName() + ')', location);
+	}
+}
+
+void AccessExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	assert(base != nullptr);
+	assert(subscript != nullptr);
+	base->findVariables(usages);
+	subscript->findVariables(usages);
 }

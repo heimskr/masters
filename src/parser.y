@@ -260,7 +260,7 @@ expr: expr "&&"   expr { $$ = $2->adopt({$1, $3}); }
     | "arguments";
 
 expr_with_comma: expr
-               | expr "," expr { $$ = $2->adopt({$1, $3}); };
+               | expr_with_comma "," expr { $$ = $2->adopt({$1, $3}); };
 
 string: JSTOK_STRING;
 

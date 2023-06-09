@@ -3,22 +3,16 @@
 
 #include "Errors.h"
 #include "JS.h"
+#include "Log.h"
 #include "Utils.h"
 #include "Value.h"
 
 template <typename T, typename... Args>
 static T * make(const Value &base, Args &&...args) {
-	if (base.context == nullptr)
-		return new T(std::forward<Args>(args)...);
+	assert(base.context != nullptr);
+	// if (base.context == nullptr)
+	// 	return new T(std::forward<Args>(args)...);
 	return base.context->makeValue<T>(std::forward<Args>(args)...);
-}
-
-std::unordered_set<Value *> Object::getReferents() const {
-	std::unordered_set<Value *> out;
-	out.reserve(map.size());
-	for (const auto &[name, value]: map)
-		out.insert(value);
-	return out;
 }
 
 Array::operator std::string() const {
@@ -61,15 +55,43 @@ Array::operator double() const {
 	return nan("");
 }
 
+Object::Object(const Array &array) {
+	if (array.isHoley()) {
+		const auto &holey = std::get<Array::Holey>(array.values);
+		for (const auto &[key, value]: holey)
+			map[std::to_string(key)] = value->copy();
+	} else {
+		const auto &holeless = std::get<Array::Holeless>(array.values);
+		size_t i = 0;
+		for (const auto &value: holeless)
+			map[std::to_string(i++)] = value->copy();
+	}
+}
+
+Value * Object::copy() const {
+	auto *out = new Object;
+	for (const auto &[key, value]: map)
+		out->map[key] = value->copy();
+	return out;
+}
+
+Number * Object::toNumber() const {
+	return make<Number>(*this, nan(""));
+}
+
+std::unordered_set<Value *> Object::getReferents() const {
+	std::unordered_set<Value *> out;
+	out.reserve(map.size());
+	for (const auto &[name, value]: map)
+		out.insert(value);
+	return out;
+}
+
 Number * Null::toNumber() const {
 	return make<Number>(*this, 0.);
 }
 
 Number * Undefined::toNumber() const {
-	return make<Number>(*this, nan(""));
-}
-
-Number * Object::toNumber() const {
 	return make<Number>(*this, nan(""));
 }
 
@@ -83,6 +105,22 @@ std::unordered_set<Value *> Array::getReferents() const {
 	for (const auto &[key, value]: std::get<Holey>(values))
 		out.insert(value);
 	return out;
+}
+
+Value * Array::copy() const {
+	if (isHoley()) {
+		const auto &holey = std::get<Holey>(values);
+		Holey copies;
+		for (const auto &[key, value]: holey)
+			copies[key] = value->copy();
+		return new Array(std::move(copies));
+	}
+
+	const auto &holeless = std::get<Holeless>(values);
+	Holeless copies;
+	for (const auto &value: holeless)
+		copies.push_back(value->copy());
+	return new Array(std::move(copies));
 }
 
 Number * Array::toNumber() const {
@@ -116,6 +154,27 @@ Value * Array::operator[](size_t index) const {
 	return nullptr;
 }
 
+Value *& Array::fetchOrMake(size_t index) {
+	if (isHoley()) {
+		auto &holey = std::get<Holey>(values);
+		if (auto iter = holey.find(index); iter != holey.end())
+			return iter->second;
+		return holey[index] = make<Undefined>(*this);
+	}
+
+	auto &holeless = std::get<Holeless>(values);
+	if (index < holeless.size())
+		return holeless.at(index);
+
+	if (index == holeless.size()) {
+		holeless.push_back(make<Undefined>(*this));
+		return holeless.back();
+	}
+
+	convertToHoley();
+	return fetchOrMake(index);
+}
+
 size_t Array::size() const {
 	if (isHoley())
 		return std::get<Holey>(values).size();
@@ -126,6 +185,17 @@ bool Array::empty() const {
 	if (isHoley())
 		return std::get<Holey>(values).empty();
 	return std::get<Holeless>(values).empty();
+}
+
+void Array::convertToHoley() {
+	if (isHoley())
+		return;
+
+	Holey holey;
+	size_t i = 0;
+	for (auto *value: std::get<Holeless>(values))
+		holey[i++] = value;
+	values = std::move(holey);
 }
 
 Number * Number::toNumber() const {

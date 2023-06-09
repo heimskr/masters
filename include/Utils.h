@@ -1,8 +1,11 @@
 #pragma once
 
+#include <csignal>
 #include <cstdint>
 #include <string>
 #include <vector>
+
+#include "Log.h"
 
 // Credit for reverse: https://stackoverflow.com/a/28139075/227663
 
@@ -46,6 +49,11 @@ struct FieldSaver {
 		member(member_),
 		oldValue(object_.*member_) {}
 
+	FieldSaver(T &object_, M T::*member_, M old_value):
+		object(&object_),
+		member(member_),
+		oldValue(std::move(old_value)) {}
+
 	FieldSaver(const FieldSaver &) = delete;
 
 	FieldSaver(FieldSaver &&other): object(other.object), member(other.member), oldValue(std::move(other.oldValue)) {
@@ -59,5 +67,8 @@ struct FieldSaver {
 		other.member = {};
 	}
 
-	~FieldSaver() { if (member != nullptr) object->*member = oldValue; }
+	~FieldSaver() {
+		if (member != nullptr)
+			object->*member = std::move(oldValue);
+	}
 };

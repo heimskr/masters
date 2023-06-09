@@ -23,7 +23,7 @@ DeclarationKind getKind(int symbol);
 enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
 	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return, ObjectExpression,
-	DotExpression, NumberLiteral, StringLiteral, BooleanLiteral, ArrayExpression,
+	DotExpression, NumberLiteral, StringLiteral, BooleanLiteral, ArrayExpression, AccessExpression,
 };
 
 struct VariableUsage {
@@ -124,7 +124,7 @@ class BinaryExpression: public Expression {
 			AdditionAssignment, SubtractionAssignment, MultiplicationAssignment, ExponentiationAssignment,
 			DivisionAssignment, ModuloAssignment, LeftShiftAssignment, RightShiftArithmeticAssignment,
 			RightShiftLogicalAssignment, BitwiseAndAssignment, BitwiseOrAssignment, LogicalOrAssignment,
-			LogicalAndAssignment, BitwiseXorAssignment, In, Instanceof,
+			LogicalAndAssignment, BitwiseXorAssignment, In, Instanceof, Comma,
 		};
 
 		Type type = Type::Invalid;
@@ -344,6 +344,18 @@ class DotExpression: public Expression {
 		DotExpression(const ASTNode &);
 
 		NodeType getType() const override { return NodeType::DotExpression; }
+		Value * evaluate(Context &) override;
+		void findVariables(std::vector<VariableUsage> &) const override;
+};
+
+class AccessExpression: public Expression {
+	public:
+		std::unique_ptr<Expression> base;
+		std::unique_ptr<Expression> subscript;
+
+		AccessExpression(const ASTNode &);
+
+		NodeType getType() const override { return NodeType::AccessExpression; }
 		Value * evaluate(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override;
 };
