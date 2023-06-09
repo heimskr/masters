@@ -13,11 +13,11 @@ static T * make(const Value &base, Args &&...args) {
 	return base.context->makeValue<T>(std::forward<Args>(args)...);
 }
 
-std::vector<Value *> Object::getReferents() const {
-	std::vector<Value *> out;
+std::unordered_set<Value *> Object::getReferents() const {
+	std::unordered_set<Value *> out;
 	out.reserve(map.size());
 	for (const auto &[name, value]: map)
-		out.push_back(value);
+		out.insert(value);
 	return out;
 }
 
@@ -320,7 +320,7 @@ Value * Reference::shiftRightArithmetic(const Value &other) const {
 	return referent->shiftRightArithmetic(other);
 }
 
-Function::Function(FunctionType function_, Value *this_obj, std::vector<Value *> closure_):
+Function::Function(FunctionType function_, Value *this_obj, std::unordered_set<Value *> closure_):
 	function(std::move(function_)),
 	thisObj(this_obj),
 	closure(std::move(closure_)) {}
@@ -333,9 +333,9 @@ Value * Function::operator==(const Value &other) const {
 	return make<Boolean>(*this, this == &other);
 }
 
-std::vector<Value *> Function::getReferents() const {
+std::unordered_set<Value *> Function::getReferents() const {
 	auto out = closure;
 	if (thisObj != nullptr)
-		out.push_back(thisObj);
+		out.insert(thisObj);
 	return out;
 }

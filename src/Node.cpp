@@ -116,21 +116,15 @@ std::pair<Result, Value *> Block::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
-Generator<std::string> Block::findVariables() const {
+void Block::findVariables(std::vector<VariableUsage> &usages) const {
 	for (const auto &node: body)
-		for (const auto &variable: node->findVariables())
-			co_yield variable;
+		node->findVariables(usages);
 }
 
-Generator<std::string> Block::findKilledVariables() const {
-	for (const auto &node: body)
-		node->findKilledVariables(killed);
-}
-
-void Block::findAll(std::unordered_set<std::string> &variables, std::unordered_set<std::string> &killed) const {
-	for (const auto &node: body)
-		node->findAll(variables, killed);
-}
+// void Block::findKilledVariables(std::unordered_set<std::string> &killed) const {
+// 	for (const auto &node: body)
+// 		node->findKilledVariables(killed);
+// }
 
 VariableDefinition::VariableDefinition(const ASTNode &node):
 	ident(*node.text),
@@ -140,9 +134,13 @@ std::pair<Result, Value *> VariableDefinition::interpret(Context &) {
 	throw std::logic_error("Unimplemented");
 }
 
-void VariableDefinition::findKilledVariables(std::unordered_set<std::string> &killed) const {
-	killed.insert(ident);
+void VariableDefinition::findVariables(std::vector<VariableUsage> &usages) const {
+	usages.emplace_back(true, ident);
 }
+
+// void VariableDefinition::findKilledVariables(std::unordered_set<std::string> &killed) const {
+// 	killed.insert(ident);
+// }
 
 VariableDefinitions::VariableDefinitions(const ASTNode &node): kind(getKind(node.at(0)->symbol)) {
 	absorbPosition(node);
@@ -169,10 +167,15 @@ std::pair<Result, Value *> VariableDefinitions::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
-void VariableDefinitions::findKilledVariables(std::unordered_set<std::string> &killed) const {
+void VariableDefinitions::findVariables(std::vector<VariableUsage> &usages) const {
 	for (const auto &definition: definitions)
-		definition->findKilledVariables(killed);
+		definition->findVariables(usages);
 }
+
+// void VariableDefinitions::findKilledVariables(std::unordered_set<std::string> &killed) const {
+// 	for (const auto &definition: definitions)
+// 		definition->findKilledVariables(killed);
+// }
 
 IfStatement::IfStatement(const ASTNode &node):
 	condition(Expression::create(*node.at(0))),
@@ -187,9 +190,9 @@ std::pair<Result, Value *> IfStatement::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
-void IfStatement::findVariables(std::unordered_set<std::string> &found) const {
+void IfStatement::findVariables(std::vector<VariableUsage> &usages) const {
 	assert(condition);
-	condition->findVariables(found);
+	condition->findVariables(usages);
 }
 
 WhileLoop::WhileLoop(const ASTNode &node):
@@ -210,9 +213,9 @@ std::pair<Result, Value *> WhileLoop::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
-void WhileLoop::findVariables(std::unordered_set<std::string> &found) const {
+void WhileLoop::findVariables(std::vector<VariableUsage> &usages) const {
 	assert(condition);
-	condition->findVariables(found);
+	condition->findVariables(usages);
 }
 
 std::pair<Result, Value *> Continue::interpret(Context &) {
@@ -232,9 +235,9 @@ std::pair<Result, Value *> Return::interpret(Context &context) {
 	return {Result::Return, context.makeValue<Undefined>()};
 }
 
-void Return::findVariables(std::unordered_set<std::string> &found) const {
+void Return::findVariables(std::vector<VariableUsage> &usages) const {
 	if (returnValue)
-		returnValue->findVariables(found);
+		returnValue->findVariables(usages);
 }
 
 std::pair<Result, Value *> Expression::interpret(Context &context) {
@@ -363,6 +366,11 @@ BinaryExpression::Type BinaryExpression::getType(int symbol) {
 	}
 }
 
+void BinaryExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	left->findVariables(usages);
+	right->findVariables(usages);
+}
+
 UnaryExpression::UnaryExpression(const ASTNode &node):
 	type(getType(node.symbol)),
 	subexpr(Expression::create(*node.front())) {}
@@ -427,6 +435,10 @@ UnaryExpression::Type UnaryExpression::getType(int symbol) {
 	}
 }
 
+void UnaryExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	subexpr->findVariables(usages);
+}
+
 std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 	switch (node.symbol) {
 		case JSTOK_TEQ:
@@ -473,6 +485,9 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_FUNCTION:
 			return std::make_unique<FunctionExpression>(node);
 
+		case JS_OBJECT:
+			return std::make_unique<ObjectExpression>(node);
+
 		default:
 			node.debug();
 			throw std::invalid_argument("Unhandled symbol in Expression::create: " + std::string(node.getName()));
@@ -516,6 +531,10 @@ Value * Identifier::evaluate(Context &context) {
 		return *(referenced = result);
 
 	throw ReferenceError(name, location);
+}
+
+void Identifier::findVariables(std::vector<VariableUsage> &usages) const {
+	usages.emplace_back(false, name);
 }
 
 NumberLiteral::NumberLiteral(const ASTNode &node): value(parseDouble(*node.text)) {
@@ -567,11 +586,11 @@ Value * FunctionCall::evaluate(Context &context) {
 	return cast_function.function(context, argument_values, cast_function.thisObj);
 }
 
-void FunctionCall::findVariables(std::unordered_set<std::string> &found) const {
+void FunctionCall::findVariables(std::vector<VariableUsage> &usages) const {
 	if (function)
-		function->findVariables(found);
+		function->findVariables(usages);
 	for (const auto &argument: arguments)
-		argument->findVariables(found);
+		argument->findVariables(usages);
 }
 
 FunctionExpression::FunctionExpression(const ASTNode &node):
@@ -603,7 +622,7 @@ Value * FunctionExpression::evaluate(Context &context) {
 		context.stack.pop();
 
 		return value;
-	}, this_obj? *this_obj : nullptr);
+	}, this_obj != nullptr? *this_obj : nullptr, assembleClosure(context));
 }
 
 std::pair<Result, Value *> FunctionExpression::interpret(Context &context) {
@@ -612,7 +631,47 @@ std::pair<Result, Value *> FunctionExpression::interpret(Context &context) {
 	return {Result::None, evaluate(context)};
 }
 
-void FunctionExpression::findVariables(std::unordered_set<std::string> &found) const {
+void FunctionExpression::findVariables(std::vector<VariableUsage> &usages) const {
 	if (!name.empty())
-		found.insert(name);
+		usages.emplace_back(true, name);
+}
+
+std::unordered_set<Value *> FunctionExpression::assembleClosure(Context &context) const {
+	std::vector<VariableUsage> usages;
+	body->findVariables(usages);
+
+	std::unordered_set<Value *> closure;
+	std::unordered_set<std::string> killed;
+
+	for (const auto &[was_killed, variable]: usages) {
+		if (was_killed) {
+			killed.insert(variable);
+		} else if (!killed.contains(variable)) {
+			Value **found = context.stack.lookup(variable);
+			if (found != nullptr) {
+				assert(*found != nullptr);
+				closure.insert(*found);
+			}
+		}
+	}
+
+	return closure;
+}
+
+ObjectExpression::ObjectExpression(const ASTNode &node) {
+	if (!node.empty())
+		for (const auto &subnode: *node.front())
+			map[*subnode->text] = Expression::create(*subnode->front());
+}
+
+Value * ObjectExpression::evaluate(Context &context) {
+	auto *out = context.makeValue<Object>();
+	for (const auto &[key, expression]: map)
+		out->map[key] = expression->evaluate(context);
+	return out;
+}
+
+void ObjectExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	for (const auto &[key, expression]: map)
+		expression->findVariables(usages);
 }

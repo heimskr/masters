@@ -113,7 +113,7 @@ using AN = ASTNode;
 %token JSTOK_ARGUMENTS "arguments"
 %token JSTOK_VAR "var"
 
-%token JS_LIST JS_BLOCK JS_EMPTY JS_POSTPLUS JS_POSTMINUS
+%token JS_LIST JS_BLOCK JS_EMPTY JS_POSTPLUS JS_POSTMINUS JS_OBJECT
 
 %start start
 
@@ -242,6 +242,7 @@ expr: expr "&&"   expr { $$ = $2->adopt({$1, $3}); }
     | string
     | number
     | function
+    | object
     | "new" expr "(" exprlist_ ")" %prec NEW_ARGS { $$ = $1->adopt({$2, $4}); D($3, $5); }
     | "new" expr %prec NEW_NO_ARGS { $$ = $1->adopt($2); }
 	| "delete" expr { $$ = $1->adopt($2); }
@@ -273,6 +274,18 @@ arglist_: arglist
 
 number: JSTOK_NUMBER;
 ident:  JSTOK_IDENT;
+
+comma_: "," | { $$ = nullptr; };
+
+object: "{" "}"                 { $$ = $1; $$->symbol = JS_OBJECT; D($2); }
+      | "{" object_list "}"     { $$ = $1->adopt($2); $$->symbol = JS_OBJECT; D($3); }
+      | "{" object_list "," "}" { $$ = $1->adopt($2); $$->symbol = JS_OBJECT; D($3, $4); };
+
+object_list: object_list "," object_item { $$ = $1->adopt($3); D($2); }
+           | object_item { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); };
+
+object_item: ident { $$ = $1->adopt($1->copy()); }
+           | ident ":" expr { $$ = $1->adopt($3); D($2); };
 
 %%
 

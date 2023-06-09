@@ -5,6 +5,7 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 class Context;
@@ -24,7 +25,7 @@ class Value {
 		Context *context = nullptr;
 		virtual ~Value() = default;
 		virtual ValueType getType() const = 0;
-		virtual std::vector<Value *> getReferents() const { return {}; }
+		virtual std::unordered_set<Value *> getReferents() const { return {}; }
 		virtual Number * toNumber() const {
 			throw std::runtime_error("Cannot convert value of type " + getName() + " to a number");
 		}
@@ -94,7 +95,7 @@ class Object: public Value {
 		std::map<std::string, Value *> map;
 		Object() = default;
 		ValueType getType() const override { return ValueType::Object; }
-		std::vector<Value *> getReferents() const override;
+		std::unordered_set<Value *> getReferents() const override;
 		Number * toNumber() const override;
 		std::string getName() const override { return "Object"; }
 		explicit operator std::string() const override { return "[object Object]"; }
@@ -111,7 +112,7 @@ class Array: public Value {
 		Array() = default;
 		Array(std::vector<Value *> values_): values(std::move(values_)) {}
 		ValueType getType() const override { return ValueType::Array; }
-		std::vector<Value *> getReferents() const override { return values; }
+		std::unordered_set<Value *> getReferents() const override { return {values.begin(), values.end()}; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Array"; }
 		explicit operator std::string() const override;
@@ -169,7 +170,7 @@ class Reference: public Value {
 		Value *referent;
 		ValueType getType() const override { return ValueType::Reference; }
 		Reference(Value *referent_): referent(referent_) {}
-		std::vector<Value *> getReferents() const override { assert(referent); return {referent}; }
+		std::unordered_set<Value *> getReferents() const override { assert(referent); return {referent}; }
 		Number * toNumber() const override { assert(referent); return referent->toNumber(); }
 		std::string getName() const override { return "Reference[" + referent->getName() + ']'; }
 		explicit operator std::string() const override { assert(referent); return static_cast<std::string>(*referent); }
@@ -204,9 +205,9 @@ class Function: public Value {
 		using FunctionType = std::function<Value *(Context &, const std::vector<Value *> &arguments, Value *this_obj)>;
 		FunctionType function;
 		Value *thisObj = nullptr;
-		std::vector<Value *> closure;
-		Function(FunctionType function_ = {}, Value *this_obj = nullptr, std::vector<Value *> closure_ = {});
-		std::vector<Value *> getReferents() const override;
+		std::unordered_set<Value *> closure;
+		Function(FunctionType function_ = {}, Value *this_obj = nullptr, std::unordered_set<Value *> closure_ = {});
+		std::unordered_set<Value *> getReferents() const override;
 		ValueType getType() const override { return ValueType::Function; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Function"; }

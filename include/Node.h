@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -9,7 +10,6 @@
 
 #include "ASTNode.h"
 #include "Errors.h"
-#include "Generator.h"
 
 class Context;
 class Statement;
@@ -22,7 +22,14 @@ DeclarationKind getKind(int symbol);
 
 enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
-	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return,
+	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return, Object,
+};
+
+struct VariableUsage {
+	bool isKill;
+	std::string name;
+	VariableUsage(bool is_kill, std::string name_):
+		isKill(is_kill), name(std::move(name_)) {}
 };
 
 class Node {
@@ -41,11 +48,9 @@ class Node {
 		}
 
 		/** Helps find all variables inside a function body for the purpose of assembling a closure set. */
-		virtual Generator<std::string> findVariables() const {
+		virtual void findVariables(std::vector<VariableUsage> &) const {
 			throw Unimplemented("Can't find variables in node of type " + std::string(typeid(*this).name()));
 		}
-
-		virtual Generator<std::string> findKilledVariables() const { co_return; }
 
 		void assertType(NodeType);
 
@@ -106,7 +111,7 @@ class Identifier: public LValueExpression {
 		std::string name;
 		Identifier(const ASTNode &);
 		Value * evaluate(Context &) override;
-		Generator<std::string> findVariables() const override;
+		void findVariables(std::vector<VariableUsage> &) const override;
 };
 
 class BinaryExpression: public Expression {
@@ -129,7 +134,7 @@ class BinaryExpression: public Expression {
 
 		NodeType getType() const override { return NodeType::BinaryExpression; }
 		Value * evaluate(Context &) override;
-		Generator<std::string> findVariables() const override;
+		void findVariables(std::vector<VariableUsage> &) const override;
 
 		static Type getType(int symbol);
 		static std::unordered_set<Type> assignmentTypes;
@@ -153,7 +158,7 @@ class UnaryExpression: public Expression {
 
 		NodeType getType() const override { return NodeType::UnaryExpression; }
 		Value * evaluate(Context &) override;
-		Generator<std::string> findVariables() const override;
+		void findVariables(std::vector<VariableUsage> &) const override;
 
 		static Type getType(int symbol);
 };
@@ -162,7 +167,6 @@ class NewExpression: public Expression {
 	public:
 		std::unique_ptr<Expression> classExpression;
 		std::vector<std::unique_ptr<Expression>> arguments;
-		// Generator<std::string> findVariables() const override;
 };
 
 class Block: public Statement {
@@ -173,8 +177,7 @@ class Block: public Statement {
 
 		NodeType getType() const override { return NodeType::Block; }
 		std::pair<Result, Value *> interpret(Context &) override;
-		Generator<std::string> findVariables() const override;
-		Generator<std::string> findKilledVariables() const override;
+		void findVariables(std::vector<VariableUsage> &) const override;
 };
 
 class FunctionExpression: public Expression {
@@ -188,7 +191,8 @@ class FunctionExpression: public Expression {
 		NodeType getType() const override { return NodeType::FunctionExpression; }
 		Value * evaluate(Context &) override;
 		std::pair<Result, Value *> interpret(Context &) override;
-		Generator<std::string> findVariables() const override;
+		void findVariables(std::vector<VariableUsage> &) const override;
+		std::unordered_set<Value *> assembleClosure(Context &) const;
 };
 
 class VariableDefinition: public Node {
@@ -200,8 +204,7 @@ class VariableDefinition: public Node {
 		NodeType getType() const override { return NodeType::VariableDefinition; }
 		std::pair<Result, Value *> interpret(Context &) override;
 		/** A variable definition kills the parent-scope variable for the rest of the scope. */
-		Generator<std::string> findVariables() const override { co_return; }
-		Generator<std::string> findKilledVariables() const override;
+		void findVariables(std::vector<VariableUsage> &) const override;
 };
 
 class VariableDefinitions: public Statement {
@@ -213,8 +216,7 @@ class VariableDefinitions: public Statement {
 
 		NodeType getType() const override { return NodeType::VariableDefinitions; }
 		std::pair<Result, Value *> interpret(Context &) override;
-		Generator<std::string> findVariables() const override { co_return; }
-		Generator<std::string> findKilledVariables() const override;
+		void findVariables(std::vector<VariableUsage> &) const override;
 };
 
 class IfStatement: public Statement {
@@ -227,7 +229,7 @@ class IfStatement: public Statement {
 
 		NodeType getType() const override { return NodeType::IfStatement; }
 		std::pair<Result, Value *> interpret(Context &) override;
-		Generator<std::string> findVariables() const override;
+		void findVariables(std::vector<VariableUsage> &) const override;
 };
 
 class WhileLoop: public Statement {
@@ -239,7 +241,7 @@ class WhileLoop: public Statement {
 
 		NodeType getType() const override { return NodeType::WhileLoop; }
 		std::pair<Result, Value *> interpret(Context &) override;
-		Generator<std::string> findVariables() const override;
+		void findVariables(std::vector<VariableUsage> &) const override;
 };
 
 class Continue: public Statement {
@@ -247,7 +249,7 @@ class Continue: public Statement {
 		Continue() = default;
 		NodeType getType() const override { return NodeType::Continue; }
 		std::pair<Result, Value *> interpret(Context &) override;
-		Generator<std::string> findVariables() const override { co_return; }
+		void findVariables(std::vector<VariableUsage> &) const override {}
 };
 
 class Break: public Statement {
@@ -255,7 +257,7 @@ class Break: public Statement {
 		Break() = default;
 		NodeType getType() const override { return NodeType::Break; }
 		std::pair<Result, Value *> interpret(Context &) override;
-		Generator<std::string> findVariables() const override { co_return; }
+		void findVariables(std::vector<VariableUsage> &) const override {}
 };
 
 class Return: public Statement {
@@ -264,7 +266,7 @@ class Return: public Statement {
 		Return(const ASTNode &);
 		NodeType getType() const override { return NodeType::Return; }
 		std::pair<Result, Value *> interpret(Context &) override;
-		Generator<std::string> findVariables() const override;
+		void findVariables(std::vector<VariableUsage> &) const override;
 };
 
 struct NumberLiteral: public Expression {
@@ -272,7 +274,7 @@ struct NumberLiteral: public Expression {
 		double value;
 		NumberLiteral(const ASTNode &node);
 		Value * evaluate(Context &) override;
-		Generator<std::string> findVariables() const override { co_return; }
+		void findVariables(std::vector<VariableUsage> &) const override {}
 };
 
 struct StringLiteral: public Expression {
@@ -280,7 +282,7 @@ struct StringLiteral: public Expression {
 		std::string value;
 		StringLiteral(const ASTNode &node);
 		Value * evaluate(Context &) override;
-		Generator<std::string> findVariables() const override { co_return; }
+		void findVariables(std::vector<VariableUsage> &) const override {}
 };
 
 struct BooleanLiteral: public Expression {
@@ -288,7 +290,7 @@ struct BooleanLiteral: public Expression {
 		bool value;
 		BooleanLiteral(const ASTNode &node);
 		Value * evaluate(Context &) override;
-		Generator<std::string> findVariables() const override { co_return; }
+		void findVariables(std::vector<VariableUsage> &) const override {}
 };
 
 struct FunctionCall: public Expression {
@@ -300,5 +302,16 @@ struct FunctionCall: public Expression {
 
 		NodeType getType() const override { return NodeType::FunctionCall; }
 		Value * evaluate(Context &) override;
-		Generator<std::string> findVariables() const override;
+		void findVariables(std::vector<VariableUsage> &) const override;
+};
+
+class ObjectExpression: public Expression {
+	public:
+		std::map<std::string, std::unique_ptr<Expression>> map;
+
+		ObjectExpression(const ASTNode &);
+
+		NodeType getType() const override { return NodeType::Object; }
+		Value * evaluate(Context &) override;
+		void findVariables(std::vector<VariableUsage> &) const override;
 };

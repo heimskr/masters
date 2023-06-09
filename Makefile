@@ -54,7 +54,7 @@ $(PARSERCPP:.cpp=.o): $(PARSERCPP) $(PARSERHDR)
 	$(COMPILER) $(CFLAGS) $(LEXFLAGS) -c $< -o $@
 
 test: $(OUTPUT)
-	./$(OUTPUT) < js/this.js
+	./$(OUTPUT) < js/objects.js
 
 clean:
 	rm -f $(OUTPUT) src/*.o src/**/*.o PVS-Studio.log report.tasks strace_out
