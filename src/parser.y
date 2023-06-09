@@ -113,7 +113,7 @@ using AN = ASTNode;
 %token JSTOK_ARGUMENTS "arguments"
 %token JSTOK_VAR "var"
 
-%token JS_LIST JS_BLOCK JS_EMPTY JS_POSTPLUS JS_POSTMINUS JS_OBJECT
+%token JS_LIST JS_BLOCK JS_EMPTY JS_POSTPLUS JS_POSTMINUS JS_OBJECT JS_ARRAY
 
 %start start
 
@@ -151,15 +151,15 @@ statement: block
          | for_loop
          | while_loop
          | conditional
-         | full_var_def
-         | expr       ";" { D($2); }
-         | "return"   ";" { D($2); }
-         | "break"    ";" { D($2); }
-         | "continue" ";" { D($2); }
+         | full_var_def  ";" { D($2); }
+         | expr          ";" { D($2); }
+         | "return"      ";" { D($2); }
+         | "break"       ";" { D($2); }
+         | "continue"    ";" { D($2); }
          | "return" expr ";" { $$ = $1->adopt($2); D($3); }
          | ";" { $1->symbol = JS_EMPTY; };
 
-full_var_def: var_type var_def_list ";" { $$ = $1->adopt($2); D($3); };
+full_var_def: var_type var_def_list { $$ = $1->adopt($2); };
 
 var_def_list: var_def_list "," var_def { $$ = $1->adopt($3); D($2); }
             | var_def { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); };
@@ -183,9 +183,13 @@ conditional: "if" "(" expr ")" statement "else" statement { $$ = $1->adopt({$3, 
 while_loop: "while" "(" expr ")" statement          { $$ = $1->adopt({$3, $5}); D($2, $4);     }
           | "do" statement "while" "(" expr ")" ";" { $$ = $1->adopt({$5, $2}); D($4, $6, $7); };
 
-for_loop: "for" "(" expr ";" expr_ ";" expr_ ")" statement { $$ = $1->adopt({$3, $5, $7, $9}); D($2, $4, $6, $8); };
+for_loop: "for" "(" for_start ";" expr_with_comma_ ";" expr_with_comma_ ")" statement { $$ = $1->adopt({$3, $5, $7, $9}); D($2, $4, $6, $8); };
 
 expr_: expr | { $$ = new ASTNode(jsParser, JS_EMPTY); };
+
+expr_with_comma_: expr_with_comma | { $$ = new ASTNode(jsParser, JS_EMPTY); };
+
+for_start: expr_ | full_var_def;
 
 expr: expr "&&"   expr { $$ = $2->adopt({$1, $3}); }
     | expr "||"   expr { $$ = $2->adopt({$1, $3}); }
@@ -227,7 +231,7 @@ expr: expr "&&"   expr { $$ = $2->adopt({$1, $3}); }
     | expr "." JSTOK_IDENT %prec "." { $$ = $2->adopt({$1, $3});        }
     | expr "[" expr "]"    %prec "[" { $$ = $2->adopt({$1, $3}); D($4); }
     | function_call %prec CALL
-    | "(" expr ")" %prec "(" { $$ = $2; D($1, $3); }
+    | "(" expr_with_comma ")" %prec "(" { $$ = $2; D($1, $3); }
     | "!" expr { $$ = $1->adopt($2); }
     | "~" expr { $$ = $1->adopt($2); }
     | expr "?" expr ":" expr %prec "?" { $$ = $2->adopt({$1, $3, $5}); D($4); }
@@ -243,16 +247,20 @@ expr: expr "&&"   expr { $$ = $2->adopt({$1, $3}); }
     | number
     | function
     | object
+    | array
     | "new" expr "(" exprlist_ ")" %prec NEW_ARGS { $$ = $1->adopt({$2, $4}); D($3, $5); }
     | "new" expr %prec NEW_NO_ARGS { $$ = $1->adopt($2); }
-	| "delete" expr { $$ = $1->adopt($2); }
-	| "void"   expr { $$ = $1->adopt($2); }
-	| "typeof" expr { $$ = $1->adopt($2); }
+    | "delete" expr { $$ = $1->adopt($2); }
+    | "void"   expr { $$ = $1->adopt($2); }
+    | "typeof" expr { $$ = $1->adopt($2); }
     | "null"
     | "undefined";
     | "NaN";
     | "Infinity"
     | "arguments";
+
+expr_with_comma: expr
+               | expr "," expr { $$ = $2->adopt({$1, $3}); };
 
 string: JSTOK_STRING;
 
@@ -275,8 +283,6 @@ arglist_: arglist
 number: JSTOK_NUMBER;
 ident:  JSTOK_IDENT;
 
-comma_: "," | { $$ = nullptr; };
-
 object: "{" "}"                 { $$ = $1; $$->symbol = JS_OBJECT; D($2); }
       | "{" object_list "}"     { $$ = $1->adopt($2); $$->symbol = JS_OBJECT; D($3); }
       | "{" object_list "," "}" { $$ = $1->adopt($2); $$->symbol = JS_OBJECT; D($3, $4); };
@@ -286,6 +292,12 @@ object_list: object_list "," object_item { $$ = $1->adopt($3); D($2); }
 
 object_item: ident { $$ = $1->adopt($1->copy()); }
            | ident ":" expr { $$ = $1->adopt($3); D($2); };
+
+array: "[" "]" { $$ = $1; $$->symbol = JS_ARRAY; D($2); }
+     | "[" array_list "]" { $$ = $1->adopt($2); $$->symbol = JS_ARRAY; D($3); }
+
+array_list: expr { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); }
+          | array_list "," expr_ { $$ = $1->adopt($3); D($2); };
 
 %%
 
