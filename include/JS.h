@@ -43,6 +43,7 @@ class ScopeStack {
 class Context {
 	public:
 		std::unordered_set<Value *> valuePool;
+		std::unordered_set<Value *> globalValues;
 		ScopeStack stack;
 		size_t lineNumber = 0;
 		size_t columnNumber = 0;
@@ -51,7 +52,6 @@ class Context {
 
 		Context() = default;
 
-		void interpret();
 		void garbageCollect();
 
 		template <typename T, typename... Args>
@@ -71,6 +71,7 @@ class Context {
 				throw std::runtime_error("Context already contains global \"" + name + '"');
 
 			stack.globals.emplace(name, value);
+			globalValues.insert(value);
 			valuePool.insert(value);
 		}
 
@@ -81,6 +82,7 @@ class Context {
 
 			Value *value = makeValue<T>(std::forward<Args>(args)...);
 			stack.globals.try_emplace(name, value);
+			globalValues.insert(value);
 			valuePool.insert(value);
 		}
 };

@@ -57,9 +57,13 @@ void Context::garbageCollect() {
 		for (const auto &[name, pair]: scope.store)
 			visit(pair.first);
 
-	while (!marked.empty()) {
-		Value *value = *marked.begin();
-		marked.erase(value);
+	std::vector<Value *> unmarked;
+
+	for (const auto &value: valuePool)
+		if (!marked.contains(value) && !globalValues.contains(value))
+			unmarked.push_back(value);
+
+	for (const auto &value: unmarked) {
 		valuePool.erase(value);
 		delete value;
 	}

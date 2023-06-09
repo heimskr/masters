@@ -26,7 +26,9 @@ int main(int, char **) {
 			return context.makeValue<Undefined>();
 		});
 		program.interpret(context);
+		std::cout << "Number of values before garbage collection: " << context.valuePool.size() << std::endl;
 		context.garbageCollect();
+		std::cout << "Number of values after garbage collection: " << context.valuePool.size() << std::endl;
 	}
 
 	jsParser.done();
