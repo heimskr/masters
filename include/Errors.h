@@ -27,7 +27,7 @@ struct GenericError: std::runtime_error {
 	template <typename... Args>
 	explicit GenericError(const ASTLocation &location_, Args &&...args):
 		std::runtime_error(std::forward<Args>(args)...), location(location_) {}
-} __attribute__((packed, aligned(16)));
+};
 
 struct ConstError: JSError {
 	using JSError::JSError;

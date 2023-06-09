@@ -120,7 +120,7 @@ using AN = ASTNode;
 %left ";"
 %left ","
 %right "?"
-%right "=" "+=" "-=" "*=" "/=" "%=" "<<=" ">>=" ">>>=" "&=" "|=" "^=" "&&=" "||="
+%right "=" "+=" "-=" "*=" "/=" "%=" "<<=" ">>=" ">>>=" "&=" "|=" "^=" "&&=" "||=" "**="
 %left "||"
 %left "&&"
 %left "|"
@@ -152,7 +152,6 @@ statement: block
          | while_loop
          | conditional
          | full_var_def
-         | function
          | expr       ";" { D($2); }
          | "return"   ";" { D($2); }
          | "break"    ";" { D($2); }

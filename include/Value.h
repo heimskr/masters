@@ -13,6 +13,10 @@ class Number;
 #define VALUE_OPERATOR_OVERRIDES \
 	virtual Value * operator==(const Value &) const override;
 
+#define VALUE_USING \
+	using Value::operator int64_t; \
+	using Value::operator uint64_t;
+
 enum class ValueType {Null, Undefined, Object, Array, Number, Boolean, String, Reference, Function};
 
 class Value {
@@ -69,6 +73,7 @@ class Null: public Value {
 		explicit operator double() const override { return 0; }
 		explicit operator bool() const override { return false; }
 		VALUE_OPERATOR_OVERRIDES
+		VALUE_USING
 };
 
 class Undefined: public Value {
@@ -81,6 +86,7 @@ class Undefined: public Value {
 		explicit operator double() const override { return nan(""); }
 		explicit operator bool() const override { return false; }
 		VALUE_OPERATOR_OVERRIDES
+		VALUE_USING
 };
 
 class Object: public Value {
@@ -95,6 +101,7 @@ class Object: public Value {
 		explicit operator double() const override { return nan(""); }
 		explicit operator bool() const override { return true; }
 		VALUE_OPERATOR_OVERRIDES
+		VALUE_USING
 };
 
 class Array: public Value {
@@ -111,6 +118,7 @@ class Array: public Value {
 		explicit operator double() const override;
 		explicit operator bool() const override { return true; }
 		VALUE_OPERATOR_OVERRIDES
+		VALUE_USING
 };
 
 class Number: public Value {
@@ -124,6 +132,7 @@ class Number: public Value {
 		explicit operator double() const override { return number; }
 		explicit operator bool() const override { return static_cast<bool>(number); }
 		VALUE_OPERATOR_OVERRIDES
+		VALUE_USING
 };
 
 class Boolean: public Value {
@@ -137,6 +146,7 @@ class Boolean: public Value {
 		explicit operator double() const override { return boolean? 1. : 0.; }
 		explicit operator bool() const override { return boolean; }
 		VALUE_OPERATOR_OVERRIDES
+		VALUE_USING
 };
 
 class String: public Value {
@@ -151,6 +161,7 @@ class String: public Value {
 		explicit operator bool() const override { return !string.empty(); }
 		VALUE_OPERATOR_OVERRIDES
 		Value * operator+(const Value &) const override;
+		VALUE_USING
 };
 
 class Reference: public Value {
@@ -185,6 +196,7 @@ class Reference: public Value {
 		Value * operator<<(const Value &) const override;
 		Value * shiftRightLogical(const Value &) const override;
 		Value * shiftRightArithmetic(const Value &) const override;
+		VALUE_USING
 };
 
 class Function: public Value {
@@ -192,8 +204,9 @@ class Function: public Value {
 		using FunctionType = std::function<Value *(Context &, const std::vector<Value *> &arguments, Value *this_obj)>;
 		FunctionType function;
 		Value *thisObj = nullptr;
-		Function(FunctionType function_ = {}, Value *this_obj = nullptr);
-		std::vector<Value *> getReferents() const override { if (thisObj != nullptr) return {thisObj}; return {}; }
+		std::vector<Value *> closure;
+		Function(FunctionType function_ = {}, Value *this_obj = nullptr, std::vector<Value *> closure_ = {});
+		std::vector<Value *> getReferents() const override;
 		ValueType getType() const override { return ValueType::Function; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Function"; }
@@ -201,4 +214,5 @@ class Function: public Value {
 		explicit operator double()      const override { return nan("");               }
 		explicit operator bool()        const override { return true;                  }
 		VALUE_OPERATOR_OVERRIDES
+		VALUE_USING
 };

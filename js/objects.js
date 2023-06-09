@@ -6,7 +6,7 @@ let obj = {
 		c: 64
 	},
 	d,
-	f(x) { return x + 1000; }
+	f: function(x) { return x + this.a; }
 };
 
 console.log(obj.f(obj.b.c));

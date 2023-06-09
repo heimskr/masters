@@ -178,14 +178,14 @@ Value * Value::shiftRightArithmetic(const Value &other) const {
 }
 
 Value * Null::operator==(const Value &right) const {
-	if (const auto *null = dynamic_cast<const Null *>(&right))
+	if (dynamic_cast<const Null *>(&right))
 		return make<Boolean>(*this, true);
 
 	return make<Boolean>(*this, false);
 }
 
 Value * Undefined::operator==(const Value &right) const {
-	if (const auto *undefined = dynamic_cast<const Undefined *>(&right))
+	if (dynamic_cast<const Undefined *>(&right))
 		return make<Boolean>(*this, true);
 
 	return make<Boolean>(*this, false);
@@ -320,9 +320,10 @@ Value * Reference::shiftRightArithmetic(const Value &other) const {
 	return referent->shiftRightArithmetic(other);
 }
 
-Function::Function(FunctionType function_, Value *this_obj):
+Function::Function(FunctionType function_, Value *this_obj, std::vector<Value *> closure_):
 	function(std::move(function_)),
-	thisObj(this_obj) {}
+	thisObj(this_obj),
+	closure(std::move(closure_)) {}
 
 Number * Function::toNumber() const {
 	return make<Number>(*this, nan(""));
@@ -330,4 +331,11 @@ Number * Function::toNumber() const {
 
 Value * Function::operator==(const Value &other) const {
 	return make<Boolean>(*this, this == &other);
+}
+
+std::vector<Value *> Function::getReferents() const {
+	auto out = closure;
+	if (thisObj != nullptr)
+		out.push_back(thisObj);
+	return out;
 }

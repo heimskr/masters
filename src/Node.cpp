@@ -81,7 +81,7 @@ std::pair<Result, Value *> Program::interpret(Context &context) {
 		const auto [result, value] = node->interpret(context);
 
 		if (result == Result::Return)
-			return {result, value};
+			return std::make_pair(result, value);
 
 		if (result == Result::Break)
 			throw JSError("Invalid break statement", node->location);
@@ -116,12 +116,32 @@ std::pair<Result, Value *> Block::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
+Generator<std::string> Block::findVariables() const {
+	for (const auto &node: body)
+		for (const auto &variable: node->findVariables())
+			co_yield variable;
+}
+
+Generator<std::string> Block::findKilledVariables() const {
+	for (const auto &node: body)
+		node->findKilledVariables(killed);
+}
+
+void Block::findAll(std::unordered_set<std::string> &variables, std::unordered_set<std::string> &killed) const {
+	for (const auto &node: body)
+		node->findAll(variables, killed);
+}
+
 VariableDefinition::VariableDefinition(const ASTNode &node):
 	ident(*node.text),
 	value(node.empty()? nullptr : Expression::create(*node.front())) {}
 
-std::pair<Result, Value *> VariableDefinition::interpret(Context &context) {
+std::pair<Result, Value *> VariableDefinition::interpret(Context &) {
 	throw std::logic_error("Unimplemented");
+}
+
+void VariableDefinition::findKilledVariables(std::unordered_set<std::string> &killed) const {
+	killed.insert(ident);
 }
 
 VariableDefinitions::VariableDefinitions(const ASTNode &node): kind(getKind(node.at(0)->symbol)) {
@@ -149,6 +169,11 @@ std::pair<Result, Value *> VariableDefinitions::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
+void VariableDefinitions::findKilledVariables(std::unordered_set<std::string> &killed) const {
+	for (const auto &definition: definitions)
+		definition->findKilledVariables(killed);
+}
+
 IfStatement::IfStatement(const ASTNode &node):
 	condition(Expression::create(*node.at(0))),
 	consequent(Statement::create(*node.at(1))),
@@ -160,6 +185,11 @@ std::pair<Result, Value *> IfStatement::interpret(Context &context) {
 	if (alternate)
 		return alternate->interpret(context);
 	return {Result::None, nullptr};
+}
+
+void IfStatement::findVariables(std::unordered_set<std::string> &found) const {
+	assert(condition);
+	condition->findVariables(found);
 }
 
 WhileLoop::WhileLoop(const ASTNode &node):
@@ -180,11 +210,16 @@ std::pair<Result, Value *> WhileLoop::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
-std::pair<Result, Value *> Continue::interpret(Context &context) {
+void WhileLoop::findVariables(std::unordered_set<std::string> &found) const {
+	assert(condition);
+	condition->findVariables(found);
+}
+
+std::pair<Result, Value *> Continue::interpret(Context &) {
 	return {Result::Continue, nullptr};
 }
 
-std::pair<Result, Value *> Break::interpret(Context &context) {
+std::pair<Result, Value *> Break::interpret(Context &) {
 	return {Result::Break, nullptr};
 }
 
@@ -195,6 +230,11 @@ std::pair<Result, Value *> Return::interpret(Context &context) {
 	if (returnValue)
 		return {Result::Return, returnValue->evaluate(context)};
 	return {Result::Return, context.makeValue<Undefined>()};
+}
+
+void Return::findVariables(std::unordered_set<std::string> &found) const {
+	if (returnValue)
+		returnValue->findVariables(found);
 }
 
 std::pair<Result, Value *> Expression::interpret(Context &context) {
@@ -250,7 +290,7 @@ Value * BinaryExpression::evaluate(Context &context) {
 	}
 }
 
-Value ** BinaryExpression::access(Context &context, bool *is_const) {
+Value ** BinaryExpression::access(Context &, bool * /*is_const*/) {
 	throw std::logic_error("Unimplemented");
 }
 
@@ -527,6 +567,13 @@ Value * FunctionCall::evaluate(Context &context) {
 	return cast_function.function(context, argument_values, cast_function.thisObj);
 }
 
+void FunctionCall::findVariables(std::unordered_set<std::string> &found) const {
+	if (function)
+		function->findVariables(found);
+	for (const auto &argument: arguments)
+		argument->findVariables(found);
+}
+
 FunctionExpression::FunctionExpression(const ASTNode &node):
 name(2 < node.size()? *node.at(2)->text : ""),
 body(std::make_unique<Block>(*node.at(1))) {
@@ -563,4 +610,9 @@ std::pair<Result, Value *> FunctionExpression::interpret(Context &context) {
 	if (!name.empty())
 		context.stack.insert(name, evaluate(context));
 	return {Result::None, evaluate(context)};
+}
+
+void FunctionExpression::findVariables(std::unordered_set<std::string> &found) const {
+	if (!name.empty())
+		found.insert(name);
 }
