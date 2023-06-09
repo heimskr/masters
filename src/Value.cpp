@@ -17,18 +17,18 @@ static T * make(const Value &base, Args &&...args) {
 
 Array::operator std::string() const {
 	std::ostringstream oss;
-	bool first = true;
 
 	if (isHoley()) {
+		size_t prev_key = 0;
 		for (const auto &[key, value]: std::get<Holey>(values)) {
-			if (first)
-				first = false;
-			else
-				oss << ',';
+			if (prev_key < key)
+				oss << std::string(key - prev_key, ',');
 			if (value != nullptr)
 				oss << static_cast<std::string>(*value);
+			prev_key = key;
 		}
 	} else {
+		bool first = true;
 		for (const Value *value: std::get<Holeless>(values)) {
 			if (first)
 				first = false;

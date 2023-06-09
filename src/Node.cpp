@@ -746,7 +746,7 @@ Value * FunctionExpression::evaluate(Context &context) {
 	if (context.nextThis != nullptr)
 		this_obj = &context.nextThis;
 	else
-	 	context.stack.lookup("this");
+		context.stack.lookup("this");
 
 	return context.makeValue<Function>([this](Context &context, const std::vector<Value *> &argument_values, Value *this_obj) {
 		context.stack.push();
