@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ASTNode.h"
+#include "Closure.h"
 #include "Errors.h"
 
 class Context;
@@ -195,7 +196,7 @@ class FunctionExpression: public Expression {
 		Value * evaluate(Context &) override;
 		std::pair<Result, Value *> interpret(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override;
-		std::unordered_set<Value *> assembleClosure(Context &) const;
+		Closure assembleClosure(Context &) const;
 };
 
 class VariableDefinition: public Node {

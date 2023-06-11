@@ -64,6 +64,16 @@ class Value {
 		virtual Value * shiftRightLogical(const Value &) const;
 		virtual Value * shiftRightArithmetic(const Value &) const;
 
+		template <typename T, typename... Args>
+		T * make(Args &&...args) const;
+
+	protected:
+		Value * setContext(Context &context_) {
+			assert(&context_);
+			context = &context_;
+			return this;
+		}
+
 	private:
 		Value * badOperator(const std::string &op) const {
 			throw std::logic_error("Invalid operator usage: " + op);
@@ -73,7 +83,7 @@ class Value {
 class Null: public Value {
 	public:
 		Null() = default;
-		Value * copy() const override { return new Null; }
+		Value * copy() const override { return (new Null)->setContext(*context); }
 		ValueType getType() const override { return ValueType::Null; };
 		Number * toNumber() const override;
 		std::string getName() const override { return "Null"; }
@@ -87,7 +97,7 @@ class Null: public Value {
 class Undefined: public Value {
 	public:
 		Undefined() = default;
-		Value * copy() const override { return new Undefined; }
+		Value * copy() const override { return (new Undefined)->setContext(*context); }
 		ValueType getType() const override { return ValueType::Undefined; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Undefined"; }
@@ -100,8 +110,8 @@ class Undefined: public Value {
 
 class Array: public Value {
 	public:
-		using Holeless = std::vector<Value *>;
-		using Holey    = std::map<size_t, Value *>;
+		using Holeless = std::vector<Reference *>;
+		using Holey    = std::map<size_t, Reference *>;
 		using Values   = std::variant<Holeless, Holey>;
 
 		Values values;
@@ -121,9 +131,9 @@ class Array: public Value {
 		explicit operator bool() const override { return true; }
 		inline bool isHoley() const { return std::holds_alternative<Holey>(values); }
 		/** Will return nullptr for out-of-range accesses. */
-		Value * operator[](size_t) const;
+		Reference * operator[](size_t) const;
 		/** Will add and return an Undefined value for out-of-range accesses. */
-		Value *& fetchOrMake(size_t);
+		Reference *& fetchOrMake(size_t);
 		size_t size() const;
 		bool empty() const;
 		VALUE_OPERATOR_OVERRIDES
@@ -135,7 +145,7 @@ class Array: public Value {
 
 class Object: public Value {
 	public:
-		std::map<std::string, Value *> map;
+		std::map<std::string, Reference *> map;
 		Object() = default;
 		Object(const Array &);
 		Value * copy() const override;
@@ -155,7 +165,7 @@ class Number: public Value {
 	public:
 		double number;
 		Number(double number_): number(number_) {}
-		Value * copy() const override { return new Number(number); }
+		Value * copy() const override { return (new Number(number))->setContext(*context); }
 		ValueType getType() const override { return ValueType::Number; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Number"; }
@@ -170,7 +180,7 @@ class Boolean: public Value {
 	public:
 		bool boolean;
 		Boolean(double boolean_): boolean(boolean_) {}
-		Value * copy() const override { return new Boolean(boolean); }
+		Value * copy() const override { return (new Boolean(boolean))->setContext(*context); }
 		ValueType getType() const override { return ValueType::Boolean; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Boolean"; }
@@ -185,7 +195,7 @@ class String: public Value {
 	public:
 		std::string string;
 		String(std::string string_): string(std::move(string_)) {}
-		Value * copy() const override { return new String(string); }
+		Value * copy() const override { return (new String(string))->setContext(*context); }
 		ValueType getType() const override { return ValueType::String; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "String"; }
@@ -200,21 +210,21 @@ class String: public Value {
 
 class Reference: public Value {
 	public:
-		Value **referent;
+		Value *referent;
 		bool isConst;
 		Reference() = delete;
-		Reference(Value **referent_, bool is_const = false): referent(referent_), isConst(is_const) {}
+		Reference(Value *referent_, bool is_const = false): referent(referent_), isConst(is_const) {}
 		/** Note: this creates a copy of the referred-to value, not of the reference! */
-		Value * copy() const override { assertReferent(); return (*referent)->copy(); }
+		Value * copy() const override { assertReferent(); return referent->copy(); }
 		ValueType getType() const override { return ValueType::Reference; }
-		const Value * ultimateValue() const override { assertReferent(); return (*referent)->ultimateValue(); }
-		Value * ultimateValue() override { assertReferent(); return (*referent)->ultimateValue(); }
+		const Value * ultimateValue() const override { assertReferent(); return referent->ultimateValue(); }
+		Value * ultimateValue() override { assertReferent(); return referent->ultimateValue(); }
 		ValueType ultimateType() const override;
-		void assertReferent() const { assert(referent != nullptr); assert(*referent != nullptr); }
+		void assertReferent() const { assert(referent != nullptr); }
 		std::unordered_set<Value *> getReferents() const override;
-		Number * toNumber() const override { assertReferent(); return (*referent)->toNumber(); }
-		std::string getName() const override { assertReferent(); return "Reference[" + (*referent)->getName() + ']'; }
-		bool subscriptable() const override { assertReferent(); return (*referent)->subscriptable(); }
+		Number * toNumber() const override { assertReferent(); return referent->toNumber(); }
+		std::string getName() const override { assertReferent(); return "Reference[" + referent->getName() + ']'; }
+		bool subscriptable() const override { assertReferent(); return referent->subscriptable(); }
 		explicit operator std::string() const override;
 		explicit operator double()      const override;
 		explicit operator bool()        const override;
@@ -247,10 +257,10 @@ class Function: public Value {
 		using FunctionType = std::function<Value *(Context &, const std::vector<Value *> &arguments, Value *this_obj)>;
 		FunctionType function;
 		Value *thisObj = nullptr;
-		std::unordered_set<Value *> closure;
-		Function(FunctionType function_ = {}, Value *this_obj = nullptr, std::unordered_set<Value *> closure_ = {});
+		Closure closure;
+		Function(FunctionType function_ = {}, Value *this_obj = nullptr, Closure closure_ = {});
 		/** This doesn't deep-clone thisObj. */
-		Value * copy() const override { return new Function(function, thisObj, closure); }
+		Value * copy() const override { return (new Function(function, thisObj, closure))->setContext(*context); }
 		std::unordered_set<Value *> getReferents() const override;
 		ValueType getType() const override { return ValueType::Function; }
 		Number * toNumber() const override;

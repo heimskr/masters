@@ -11,12 +11,14 @@
 #include "Utils.h"
 #include "Value.h"
 
+struct Closure;
+
 class Scope {
 	private:
 		ssize_t depth = -1;
 
 	public:
-		std::map<std::string, std::pair<Value *, bool>> store;
+		std::map<std::string, Reference *> store;
 
 		Scope() = delete;
 		Scope(ssize_t depth_): depth(depth_) {}
@@ -29,9 +31,10 @@ class ScopeStack {
 		std::vector<Scope> scopes;
 
 	public:
-		std::unordered_map<std::string, Value *> globals;
+		std::unordered_map<std::string, Reference *> globals;
+		std::vector<Closure *> closures;
 
-		Value ** lookup(const std::string &name, bool *const_out = nullptr, ssize_t *depth_out = nullptr);
+		Reference * lookup(const std::string &name, ssize_t *depth_out = nullptr);
 		void insert(const std::string &name, Value *value, bool is_const = false);
 		inline void push() { scopes.emplace_back(static_cast<ssize_t>(scopes.size())); }
 		inline void pop()  { scopes.pop_back(); }
@@ -49,6 +52,7 @@ class Context {
 		size_t columnNumber = 0;
 		bool writingMember = false;
 		Value *nextThis = nullptr;
+		Function *currentFunction = nullptr;
 
 		Context() = default;
 
@@ -63,6 +67,15 @@ class Context {
 			return new_value;
 		}
 
+		template <typename T, typename... Args>
+		Reference * makeReference(Args &&...args) {
+			return makeValue<Reference>(makeValue<T>(std::forward<Args>(args)...), false);
+		}
+
+		Reference * makeReference(Value *value) {
+			return makeValue<Reference>(value);
+		}
+
 		inline auto writeMember(bool new_value = true) {
 			const bool was_writing = writingMember;
 			writingMember = new_value;
@@ -73,7 +86,7 @@ class Context {
 			if (stack.globals.contains(name))
 				throw std::runtime_error("Context already contains global \"" + name + '"');
 
-			stack.globals.emplace(name, value);
+			stack.globals.emplace(name, makeValue<Reference>(value));
 			globalValues.insert(value);
 			valuePool.insert(value);
 		}
@@ -84,8 +97,20 @@ class Context {
 				throw std::runtime_error("Context already contains global \"" + name + '"');
 
 			Value *value = makeValue<T>(std::forward<Args>(args)...);
-			stack.globals.try_emplace(name, value);
+			stack.globals.try_emplace(name, makeValue<Reference>(value));
 			globalValues.insert(value);
 			valuePool.insert(value);
 		}
+};
+
+struct ClosureGuard {
+	Context &context;
+
+	ClosureGuard(Context &context_, Closure &closure): context(context_) {
+		context.stack.closures.push_back(&closure);
+	}
+
+	~ClosureGuard() {
+		context.stack.closures.pop_back();
+	}
 };

@@ -1,6 +1,7 @@
 #include <cassert>
 #include <csignal>
 #include <cmath>
+#include <iomanip>
 #include <iostream>
 
 #include "ASTNode.h"
@@ -144,7 +145,7 @@ VariableDefinition::VariableDefinition(const ASTNode &node):
 	value(node.empty()? nullptr : Expression::create(*node.front())) { absorbPosition(node); }
 
 std::pair<Result, Value *> VariableDefinition::interpret(Context &) {
-	throw std::logic_error("Unimplemented");
+	throw Unimplemented();
 }
 
 void VariableDefinition::findVariables(std::vector<VariableUsage> &usages) const {
@@ -171,7 +172,12 @@ std::pair<Result, Value *> VariableDefinitions::interpret(Context &context) {
 			throw std::runtime_error("Name \"" + name + "\" already exists in deepest scope");
 
 		if (definition->value) {
-			context.stack.insert(name, definition->value->evaluate(context));
+			Value *evaluated =definition->value->evaluate(context);
+			assert(evaluated != nullptr);
+
+			std::cerr << "Created " << name << ": " << evaluated << '\n';
+
+			context.stack.insert(name, evaluated);
 		} else {
 			context.stack.insert(name, context.makeValue<Undefined>());
 		}
@@ -651,10 +657,8 @@ Identifier::Identifier(const ASTNode &node): name(*node.text) {
 }
 
 Value * Identifier::evaluate(Context &context) {
-	bool is_const = false;
-
-	if (Value **result = context.stack.lookup(name, &is_const))
-		return context.makeValue<Reference>(result, is_const);
+	if (Reference *result = context.stack.lookup(name))
+		return result;
 
 	throw ReferenceError(name, location);
 }
@@ -742,6 +746,8 @@ Value * FunctionCall::evaluate(Context &context) {
 		throw TypeError('"' + static_cast<std::string>(*evaluated_function) + "\" is not a function");
 
 	auto &cast_function = dynamic_cast<Function &>(*evaluated_function->ultimateValue());
+	FieldSaver saved_function(context, &Context::currentFunction);
+	context.currentFunction = &cast_function;
 
 	std::vector<Value *> argument_values;
 	argument_values.reserve(arguments.size());
@@ -749,6 +755,7 @@ Value * FunctionCall::evaluate(Context &context) {
 	for (const auto &argument: arguments)
 		argument_values.emplace_back(argument->evaluate(context));
 
+	ClosureGuard guard(context, cast_function.closure);
 	return cast_function.function(context, argument_values, cast_function.thisObj);
 }
 
@@ -789,8 +796,14 @@ Value * FunctionExpression::evaluate(Context &context) {
 		for (; i < arguments.size(); ++i)
 			context.stack.insert(arguments.at(i)->name, context.makeValue<Undefined>());
 
-		context.stack.insert("arguments", context.makeValue<Array>(argument_values));
-		context.stack.insert("this", this_obj);
+		std::vector<Reference *> argument_references;
+		argument_references.reserve(argument_values.size());
+		for (Value *value: argument_values)
+			argument_references.push_back(context.makeReference(value));
+
+		context.stack.insert("arguments", context.makeValue<Array>(argument_references));
+		if (this_obj != nullptr)
+			context.stack.insert("this", this_obj);
 
 		const auto [result, value] = body->interpret(context);
 
@@ -811,26 +824,28 @@ void FunctionExpression::findVariables(std::vector<VariableUsage> &usages) const
 		usages.emplace_back(true, name);
 }
 
-std::unordered_set<Value *> FunctionExpression::assembleClosure(Context &context) const {
+Closure FunctionExpression::assembleClosure(Context &context) const {
 	std::vector<VariableUsage> usages;
 	body->findVariables(usages);
 
-	std::unordered_set<Value *> closure;
+	std::unordered_set<Reference *> closure;
+	std::unordered_map<std::string, Reference *> closureMap;
 	std::unordered_set<std::string> killed;
 
 	for (const auto &[was_killed, variable]: usages) {
 		if (was_killed) {
 			killed.insert(variable);
 		} else if (!killed.contains(variable)) {
-			Value **found = context.stack.lookup(variable);
+			Reference *found = context.stack.lookup(variable);
 			if (found != nullptr) {
-				assert(*found != nullptr);
-				closure.insert(*found);
+				assert(found->referent != nullptr);
+				closure.insert(found);
+				closureMap.emplace(variable, found);
 			}
 		}
 	}
 
-	return closure;
+	return {std::move(closure), std::move(closureMap)};
 }
 
 //
@@ -848,7 +863,7 @@ Value * ObjectExpression::evaluate(Context &context) {
 	FieldSaver saver(context, &Context::nextThis);
 	context.nextThis = out;
 	for (const auto &[key, expression]: map)
-		out->map[key] = expression->evaluate(context);
+		out->map[key] = context.makeReference(expression->evaluate(context));
 	return out;
 }
 
@@ -876,20 +891,20 @@ ArrayExpression::ArrayExpression(const ASTNode &node) {
 
 Value * ArrayExpression::evaluate(Context &context) {
 	if (isHoley) {
-		std::map<size_t, Value *> map;
+		std::map<size_t, Reference *> map;
 		size_t i = 0;
 		for (const auto &expression: expressions) {
 			if (expression)
-				map[i] = expression->evaluate(context);
+				map[i] = context.makeReference(expression->evaluate(context));
 			++i;
 		}
 		return context.makeValue<Array>(std::move(map), i);
 	}
 
-	std::vector<Value *> values;
+	std::vector<Reference *> values;
 	for (const auto &expression: expressions) {
 		assert(expression);
-		values.push_back(expression->evaluate(context));
+		values.push_back(context.makeReference(expression->evaluate(context)));
 	}
 	return context.makeValue<Array>(std::move(values));
 }
@@ -923,14 +938,14 @@ Value * DotExpression::evaluate(Context &context) {
 	auto *object = dynamic_cast<Object *>(lhs->ultimateValue());
 
 	if (auto iter = object->map.find(ident); iter != object->map.end())
-		return context.makeValue<Reference>(&iter->second);
+		return context.makeValue<Reference>(iter->second, false);
 
-	auto *undefined = context.makeValue<Undefined>();
+	auto *undefined_ref = context.makeReference<Undefined>();
 
 	if (context.writingMember)
-		return context.makeValue<Reference>(&(object->map[ident] = undefined));
+		return object->map[ident] = undefined_ref;
 
-	return undefined;
+	return undefined_ref;
 }
 
 void DotExpression::findVariables(std::vector<VariableUsage> &usages) const {
@@ -972,14 +987,14 @@ Value * AccessExpression::evaluate(Context &context) {
 			const auto stringified = static_cast<std::string>(*rhs);
 
 			if (auto iter = object->map.find(stringified); iter != object->map.end())
-				return context.makeValue<Reference>(&iter->second);
+				return iter->second;
 
-			auto *undefined = context.makeValue<Undefined>();
+			auto *undefined_ref = context.makeReference<Undefined>();
 
 			if (context.writingMember)
-				return context.makeValue<Reference>(&(object->map[stringified] = undefined));
+				return object->map[stringified] = undefined_ref;
 
-			return undefined;
+			return undefined_ref;
 		}
 
 		case ValueType::Array: {
@@ -1003,16 +1018,16 @@ Value * AccessExpression::evaluate(Context &context) {
 
 			if (!is_int) {
 				const auto stringified = static_cast<std::string>(*rhs);
-				*reference->referent = context.makeValue<Object>(array);
+				reference->referent = context.makeValue<Object>(array);
 			} else if (context.writingMember) {
-				return context.makeValue<Reference>(&array.fetchOrMake(index));
+				return array.fetchOrMake(index);
 			} else {
 				if (auto *fetched = array[index])
 					return fetched;
-				return context.makeValue<Undefined>();
+				return context.makeReference<Undefined>();
 			}
 
-			return *reference->referent;
+			return reference;
 		}
 
 		default:

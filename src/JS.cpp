@@ -5,26 +5,30 @@
 #include "Log.h"
 #include "Utils.h"
 
-Value ** ScopeStack::lookup(const std::string &name, bool *const_out, ssize_t *depth_out) {
+Reference * ScopeStack::lookup(const std::string &name, ssize_t *depth_out) {
+	if (!closures.empty()) {
+		Closure &closure = *closures.back();
+		if (auto iter = closure.map.find(name); iter != closure.map.end()) {
+			if (depth_out != nullptr)
+				*depth_out = -1;
+			return iter->second;
+		}
+	}
+
 	ssize_t depth = scopes.size();
 	for (Scope &scope: reverse(scopes)) {
 		--depth;
 		if (auto iter = scope.store.find(name); iter != scope.store.end()) {
 			if (depth_out != nullptr)
 				*depth_out = depth;
-			auto &[value, is_const] = iter->second;
-			if (const_out != nullptr)
-				*const_out = is_const;
-			return &value;
+			return iter->second;
 		}
 	}
 
 	if (auto iter = globals.find(name); iter != globals.end()) {
 		if (depth_out != nullptr)
 			*depth_out = 0;
-		if (const_out != nullptr)
-			*const_out = false;
-		return &iter->second;
+		return iter->second;
 	}
 
 	if (depth_out != nullptr)
@@ -37,7 +41,8 @@ void ScopeStack::insert(const std::string &name, Value *value, bool is_const) {
 	if (scopes.empty())
 		throw std::runtime_error("Cannot insert into ScopeStack: no scopes present");
 
-	scopes.back().store.try_emplace(name, value, is_const);
+	assert(value->context != nullptr);
+	scopes.back().store.try_emplace(name, value->context->makeValue<Reference>(value, is_const));
 }
 
 bool ScopeStack::inLastScope(const std::string &name) const {
@@ -72,8 +77,8 @@ void Context::garbageCollect() {
 	};
 
 	for (const Scope &scope: stack.scopes)
-		for (const auto &[name, pair]: scope.store)
-			visit(pair.first);
+		for (const auto &[name, reference]: scope.store)
+			visit(reference);
 
 	for (const auto &value: globalValues)
 		visit(value);
@@ -84,8 +89,9 @@ void Context::garbageCollect() {
 		if (!marked.contains(value) && !globalValues.contains(value))
 			unmarked.push_back(value);
 
-	for (const auto &value: unmarked) {
+	for (Value *value: unmarked) {
 		valuePool.erase(value);
+		std::cout << "Deleting " << value->getName() << '\n';
 		delete value;
 	}
 }

@@ -8,9 +8,9 @@
 #include "Value.h"
 
 template <typename T, typename... Args>
-static T * make(const Value &base, Args &&...args) {
-	assert(base.context != nullptr);
-	return base.context->makeValue<T>(std::forward<Args>(args)...);
+T * Value::make(Args &&...args) const {
+	assert(context != nullptr);
+	return context->makeValue<T>(std::forward<Args>(args)...);
 }
 
 Array::operator std::string() const {
@@ -77,16 +77,16 @@ Value * Array::copy() const {
 	if (isHoley()) {
 		const auto &holey = std::get<Holey>(values);
 		Holey copies;
-		for (const auto &[key, value]: holey)
-			copies[key] = value->copy();
-		return new Array(std::move(copies), holeyLength);
+		for (const auto &[key, reference]: holey)
+			copies[key] = make<Reference>(reference->referent, reference->isConst);
+		return (new Array(std::move(copies), holeyLength))->setContext(*context);
 	}
 
 	const auto &holeless = std::get<Holeless>(values);
 	Holeless copies;
-	for (const auto &value: holeless)
-		copies.push_back(value->copy());
-	return new Array(std::move(copies));
+	for (const auto &reference: holeless)
+		copies.push_back(make<Reference>(reference->referent));
+	return (new Array(std::move(copies)))->setContext(*context);
 }
 
 Number * Array::toNumber() const {
@@ -103,10 +103,10 @@ Number * Array::toNumber() const {
 			return holeless.front()->toNumber();
 	}
 
-	return make<Number>(*this, nan(""));
+	return make<Number>(nan(""));
 }
 
-Value * Array::operator[](size_t index) const {
+Reference * Array::operator[](size_t index) const {
 	if (isHoley()) {
 		const auto &holey = std::get<Holey>(values);
 		if (auto iter = holey.find(index); iter != holey.end())
@@ -120,12 +120,12 @@ Value * Array::operator[](size_t index) const {
 	return nullptr;
 }
 
-Value *& Array::fetchOrMake(size_t index) {
+Reference *& Array::fetchOrMake(size_t index) {
 	if (isHoley()) {
 		auto &holey = std::get<Holey>(values);
 		if (auto iter = holey.find(index); iter != holey.end())
 			return iter->second;
-		return holey[index] = make<Undefined>(*this);
+		return holey[index] = make<Reference>(make<Undefined>(), false);
 	}
 
 	auto &holeless = std::get<Holeless>(values);
@@ -133,7 +133,7 @@ Value *& Array::fetchOrMake(size_t index) {
 		return holeless.at(index);
 
 	if (index == holeless.size()) {
-		holeless.push_back(make<Undefined>(*this));
+		holeless.push_back(make<Reference>(make<Undefined>(), false));
 		return holeless.back();
 	}
 
@@ -167,25 +167,26 @@ void Array::convertToHoley() {
 Object::Object(const Array &array) {
 	if (array.isHoley()) {
 		const auto &holey = std::get<Array::Holey>(array.values);
-		for (const auto &[key, value]: holey)
-			map[std::to_string(key)] = value->copy();
+		for (const auto &[key, reference]: holey)
+			map[std::to_string(key)] = make<Reference>(reference->referent);
 	} else {
 		const auto &holeless = std::get<Array::Holeless>(array.values);
 		size_t i = 0;
-		for (const auto &value: holeless)
-			map[std::to_string(i++)] = value->copy();
+		for (const auto &reference: holeless)
+			map[std::to_string(i++)] = make<Reference>(reference->referent);
 	}
 }
 
 Value * Object::copy() const {
 	auto *out = new Object;
-	for (const auto &[key, value]: map)
-		out->map[key] = value->copy();
+	for (const auto &[key, reference]: map)
+		out->map[key] = make<Reference>(reference->referent);
+	out->setContext(*context);
 	return out;
 }
 
 Number * Object::toNumber() const {
-	return make<Number>(*this, nan(""));
+	return make<Number>(nan(""));
 }
 
 std::unordered_set<Value *> Object::getReferents() const {
@@ -197,15 +198,15 @@ std::unordered_set<Value *> Object::getReferents() const {
 }
 
 Number * Null::toNumber() const {
-	return make<Number>(*this, 0.);
+	return make<Number>(0.);
 }
 
 Number * Undefined::toNumber() const {
-	return make<Number>(*this, nan(""));
+	return make<Number>(nan(""));
 }
 
 Number * Number::toNumber() const {
-	return make<Number>(*this, number);
+	return make<Number>(number);
 }
 
 Number::operator std::string() const {
@@ -219,7 +220,7 @@ Number::operator std::string() const {
 }
 
 Number * Boolean::toNumber() const {
-	return make<Number>(*this, boolean? 1. : 0.);
+	return make<Number>(boolean? 1. : 0.);
 }
 
 String::operator double() const {
@@ -234,15 +235,15 @@ String::operator double() const {
 }
 
 Number * String::toNumber() const {
-	return make<Number>(*this, static_cast<double>(*this));
+	return make<Number>(static_cast<double>(*this));
 }
 
 Value * String::operator+(const Value &other) const {
 	switch (other.getType()) {
 		case ValueType::String:
-			return make<String>(*this, string + dynamic_cast<const String &>(other).string);
+			return make<String>(string + dynamic_cast<const String &>(other).string);
 		case ValueType::Number:
-			return make<String>(*this, string + std::to_string(dynamic_cast<const Number &>(other).number));
+			return make<String>(string + std::to_string(dynamic_cast<const Number &>(other).number));
 		default:
 			throw TypeError("Invalid string concatenation");
 	}
@@ -250,269 +251,269 @@ Value * String::operator+(const Value &other) const {
 
 Value * Value::operator+(const Value &other) const {
 	if (const auto *string = dynamic_cast<const String *>(&other))
-		return make<String>(*this, static_cast<std::string>(*this) + string->string);
+		return make<String>(static_cast<std::string>(*this) + string->string);
 
-	return make<Number>(*this, static_cast<double>(*this) + static_cast<double>(other));
+	return make<Number>(static_cast<double>(*this) + static_cast<double>(other));
 }
 
 Value * Value::operator-(const Value &other) const {
-	return make<Number>(*this, static_cast<double>(*this) - static_cast<double>(other));
+	return make<Number>(static_cast<double>(*this) - static_cast<double>(other));
 }
 
 Value * Value::operator*(const Value &other) const {
-	return make<Number>(*this, static_cast<double>(*this) * static_cast<double>(other));
+	return make<Number>(static_cast<double>(*this) * static_cast<double>(other));
 }
 
 Value * Value::operator/(const Value &other) const {
-	return make<Number>(*this, static_cast<double>(*this) / static_cast<double>(other));
+	return make<Number>(static_cast<double>(*this) / static_cast<double>(other));
 }
 
 Value * Value::operator%(const Value &other) const {
-	return make<Number>(*this, std::fmod(static_cast<double>(*this), static_cast<double>(other)));
+	return make<Number>(std::fmod(static_cast<double>(*this), static_cast<double>(other)));
 }
 
 Value * Value::operator&(const Value &other) const {
-	return make<Number>(*this, static_cast<size_t>(static_cast<double>(*this)) &
+	return make<Number>(static_cast<size_t>(static_cast<double>(*this)) &
 	                           static_cast<size_t>(static_cast<double>(other)));
 }
 
 Value * Value::operator|(const Value &other) const {
-	return make<Number>(*this, static_cast<size_t>(static_cast<double>(*this)) |
+	return make<Number>(static_cast<size_t>(static_cast<double>(*this)) |
 	                           static_cast<size_t>(static_cast<double>(other)));
 }
 
 Value * Value::operator^(const Value &other) const {
-	return make<Number>(*this, static_cast<size_t>(static_cast<double>(*this)) ^
+	return make<Number>(static_cast<size_t>(static_cast<double>(*this)) ^
 	                           static_cast<size_t>(static_cast<double>(other)));
 }
 
 Value * Value::power(const Value &other) const {
-	return make<Number>(*this, std::pow(static_cast<double>(*this), static_cast<double>(other)));
+	return make<Number>(std::pow(static_cast<double>(*this), static_cast<double>(other)));
 }
 
 Value * Value::operator&&(const Value &other) const {
-	return make<Boolean>(*this, static_cast<bool>(*this) && static_cast<bool>(other));
+	return make<Boolean>(static_cast<bool>(*this) && static_cast<bool>(other));
 }
 
 Value * Value::operator||(const Value &other) const {
-	return make<Boolean>(*this, static_cast<bool>(*this) || static_cast<bool>(other));
+	return make<Boolean>(static_cast<bool>(*this) || static_cast<bool>(other));
 }
 
 Value * Value::operator!=(const Value &other) const {
-	return make<Boolean>(*this, !(*this == other));
+	return make<Boolean>(!(*this == other));
 }
 
 Value * Value::operator<(const Value &other) const {
-	return make<Boolean>(*this, static_cast<double>(*this) < static_cast<double>(other));
+	return make<Boolean>(static_cast<double>(*this) < static_cast<double>(other));
 }
 
 Value * Value::operator>(const Value &other) const {
-	return make<Boolean>(*this, static_cast<double>(*this) > static_cast<double>(other));
+	return make<Boolean>(static_cast<double>(*this) > static_cast<double>(other));
 }
 
 Value * Value::operator<=(const Value &other) const {
-	return make<Boolean>(*this, static_cast<double>(*this) <= static_cast<double>(other));
+	return make<Boolean>(static_cast<double>(*this) <= static_cast<double>(other));
 }
 
 Value * Value::operator>=(const Value &other) const {
-	return make<Boolean>(*this, static_cast<double>(*this) >= static_cast<double>(other));
+	return make<Boolean>(static_cast<double>(*this) >= static_cast<double>(other));
 }
 
 Value * Value::operator<<(const Value &other) const {
-	return make<Number>(*this, static_cast<int64_t>(*this) << static_cast<int64_t>(other));
+	return make<Number>(static_cast<int64_t>(*this) << static_cast<int64_t>(other));
 }
 
 Value * Value::shiftRightLogical(const Value &other) const {
-	return make<Number>(*this, static_cast<uint64_t>(*this) >> static_cast<uint64_t>(other));
+	return make<Number>(static_cast<uint64_t>(*this) >> static_cast<uint64_t>(other));
 }
 
 Value * Value::shiftRightArithmetic(const Value &other) const {
-	return make<Number>(*this, static_cast<int64_t>(*this) >> static_cast<int64_t>(other));
+	return make<Number>(static_cast<int64_t>(*this) >> static_cast<int64_t>(other));
 }
 
 Value * Null::operator==(const Value &right) const {
 	if (dynamic_cast<const Null *>(&right))
-		return make<Boolean>(*this, true);
+		return make<Boolean>(true);
 
-	return make<Boolean>(*this, false);
+	return make<Boolean>(false);
 }
 
 Value * Undefined::operator==(const Value &right) const {
 	if (dynamic_cast<const Undefined *>(&right))
-		return make<Boolean>(*this, true);
+		return make<Boolean>(true);
 
-	return make<Boolean>(*this, false);
+	return make<Boolean>(false);
 }
 
 Value * Number::operator==(const Value &right) const {
 	if (const auto *other_number = dynamic_cast<const Number *>(&right))
-		return make<Boolean>(*this, number == other_number->number);
+		return make<Boolean>(number == other_number->number);
 
-	return make<Boolean>(*this, false);
+	return make<Boolean>(false);
 }
 
 Value * Boolean::operator==(const Value &right) const {
 	if (const auto *other_boolean = dynamic_cast<const Boolean *>(&right))
-		return make<Boolean>(*this, boolean == other_boolean->boolean);
+		return make<Boolean>(boolean == other_boolean->boolean);
 
-	return make<Boolean>(*this, false);
+	return make<Boolean>(false);
 }
 
 Value * String::operator==(const Value &right) const {
 	if (const auto *other_string = dynamic_cast<const String *>(&right))
-		return make<Boolean>(*this, string == other_string->string);
+		return make<Boolean>(string == other_string->string);
 
-	return make<Boolean>(*this, false);
+	return make<Boolean>(false);
 }
 
 Value * Object::operator==(const Value &right) const {
-	return make<Boolean>(*this, this == &right);
+	return make<Boolean>(this == &right);
 }
 
 Value * Array::operator==(const Value &right) const {
-	return make<Boolean>(*this, this == &right);
+	return make<Boolean>(this == &right);
 }
 
 ValueType Reference::ultimateType() const {
 	assertReferent();
-	return (*referent)->ultimateType();
+	return referent->ultimateType();
 }
 
 std::unordered_set<Value *> Reference::getReferents() const {
 	assertReferent();
-	return {*referent};
+	return {referent};
 }
 
 Reference::operator std::string() const {
 	assertReferent();
-	return static_cast<std::string>(**referent);
+	return static_cast<std::string>(*referent);
 }
 
 Reference::operator double() const {
 	assertReferent();
-	return static_cast<double>(**referent);
+	return static_cast<double>(*referent);
 }
 
 Reference::operator bool() const {
 	assertReferent();
-	return static_cast<bool>(**referent);
+	return static_cast<bool>(*referent);
 }
 
 Value * Reference::operator+(const Value &other) const {
 	assertReferent();
-	return **referent + other;
+	return *referent + other;
 }
 
 Value * Reference::operator-(const Value &other) const {
 	assertReferent();
-	return **referent - other;
+	return *referent - other;
 }
 
 Value * Reference::operator*(const Value &other) const {
 	assertReferent();
-	return **referent * other;
+	return *referent * other;
 }
 
 Value * Reference::operator/(const Value &other) const {
 	assertReferent();
-	return **referent / other;
+	return *referent / other;
 }
 
 Value * Reference::operator%(const Value &other) const {
 	assertReferent();
-	return **referent % other;
+	return *referent % other;
 }
 
 Value * Reference::operator&(const Value &other) const {
 	assertReferent();
-	return **referent & other;
+	return *referent & other;
 }
 
 Value * Reference::operator|(const Value &other) const {
 	assertReferent();
-	return **referent | other;
+	return *referent | other;
 }
 
 Value * Reference::operator^(const Value &other) const {
 	assertReferent();
-	return **referent ^ other;
+	return *referent ^ other;
 }
 
 Value * Reference::operator==(const Value &other) const {
 	assertReferent();
-	return **referent == other;
+	return *referent == other;
 }
 
 Value * Reference::operator!=(const Value &other) const {
 	assertReferent();
-	return **referent != other;
+	return *referent != other;
 }
 
 Value * Reference::operator<(const Value &other) const {
 	assertReferent();
-	return **referent < other;
+	return *referent < other;
 }
 
 Value * Reference::operator>(const Value &other) const {
 	assertReferent();
-	return **referent > other;
+	return *referent > other;
 }
 
 Value * Reference::operator<=(const Value &other) const {
 	assertReferent();
-	return **referent <= other;
+	return *referent <= other;
 }
 
 Value * Reference::operator>=(const Value &other) const {
 	assertReferent();
-	return **referent >= other;
+	return *referent >= other;
 }
 
 Value * Reference::power(const Value &other) const {
 	assertReferent();
-	return (*referent)->power(other);
+	return referent->power(other);
 }
 
 Value * Reference::operator&&(const Value &other) const {
 	assertReferent();
-	return **referent && other;
+	return *referent && other;
 }
 
 Value * Reference::operator||(const Value &other) const {
 	assertReferent();
-	return **referent || other;
+	return *referent || other;
 }
 
 Value * Reference::operator<<(const Value &other) const {
 	assertReferent();
-	return **referent << other;
+	return *referent << other;
 }
 
 Value * Reference::shiftRightLogical(const Value &other) const {
 	assertReferent();
-	return (*referent)->shiftRightLogical(other);
+	return referent->shiftRightLogical(other);
 }
 
 Value * Reference::shiftRightArithmetic(const Value &other) const {
 	assertReferent();
-	return (*referent)->shiftRightArithmetic(other);
+	return referent->shiftRightArithmetic(other);
 }
 
-Function::Function(FunctionType function_, Value *this_obj, std::unordered_set<Value *> closure_):
+Function::Function(FunctionType function_, Value *this_obj, Closure closure_):
 	function(std::move(function_)),
 	thisObj(this_obj),
 	closure(std::move(closure_)) {}
 
 Number * Function::toNumber() const {
-	return make<Number>(*this, nan(""));
+	return make<Number>(nan(""));
 }
 
 Value * Function::operator==(const Value &other) const {
-	return make<Boolean>(*this, this == &other);
+	return make<Boolean>(this == &other);
 }
 
 std::unordered_set<Value *> Function::getReferents() const {
-	auto out = closure;
+	std::unordered_set<Value *> out = {closure.references.begin(), closure.references.end()};
 	if (thisObj != nullptr)
 		out.insert(thisObj);
 	return out;
