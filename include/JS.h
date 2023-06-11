@@ -93,13 +93,7 @@ class Context {
 
 		template <typename T, typename... Args>
 		inline void makeGlobal(const std::string &name, Args &&...args) {
-			if (stack.globals.contains(name))
-				throw std::runtime_error("Context already contains global \"" + name + '"');
-
-			Value *value = makeValue<T>(std::forward<Args>(args)...);
-			stack.globals.try_emplace(name, makeValue<Reference>(value));
-			globalValues.insert(value);
-			valuePool.insert(value);
+			return addGlobal(name, makeValue<T>(std::forward<Args>(args)...));
 		}
 };
 

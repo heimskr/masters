@@ -174,9 +174,6 @@ std::pair<Result, Value *> VariableDefinitions::interpret(Context &context) {
 		if (definition->value) {
 			Value *evaluated =definition->value->evaluate(context);
 			assert(evaluated != nullptr);
-
-			std::cerr << "Created " << name << ": " << evaluated << '\n';
-
 			context.stack.insert(name, evaluated);
 		} else {
 			context.stack.insert(name, context.makeValue<Undefined>());

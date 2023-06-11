@@ -41,6 +41,7 @@ void ScopeStack::insert(const std::string &name, Value *value, bool is_const) {
 	if (scopes.empty())
 		throw std::runtime_error("Cannot insert into ScopeStack: no scopes present");
 
+	assert(value != nullptr);
 	assert(value->context != nullptr);
 	scopes.back().store.try_emplace(name, value->context->makeValue<Reference>(value, is_const));
 }
@@ -91,7 +92,6 @@ void Context::garbageCollect() {
 
 	for (Value *value: unmarked) {
 		valuePool.erase(value);
-		std::cout << "Deleting " << value->getName() << '\n';
 		delete value;
 	}
 }
