@@ -501,7 +501,7 @@ Value * Reference::shiftRightArithmetic(const Value &other) const {
 	return referent->shiftRightArithmetic(other);
 }
 
-Function::Function(FunctionType function_, Value *this_obj, Closure closure_):
+Function::Function(FunctionType function_, Reference *this_obj, Closure closure_):
 	function(std::move(function_)),
 	thisObj(this_obj),
 	closure(std::move(closure_)) {}

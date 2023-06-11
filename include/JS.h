@@ -70,7 +70,7 @@ class Context {
 		size_t lineNumber = 0;
 		size_t columnNumber = 0;
 		bool writingMember = false;
-		Value *nextThis = nullptr;
+		Reference *nextThis = nullptr;
 		Function *currentFunction = nullptr;
 
 		Context() = default;

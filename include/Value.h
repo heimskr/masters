@@ -265,11 +265,11 @@ class Reference: public Value {
 
 class Function: public Value {
 	public:
-		using FunctionType = std::function<Value *(Context &, const std::vector<Value *> &arguments, Value *this_obj)>;
+		using FunctionType = std::function<Value *(Context &, const std::vector<Value *> &args, Reference *this_obj)>;
 		FunctionType function;
-		Value *thisObj = nullptr;
+		Reference *thisObj = nullptr;
 		Closure closure;
-		Function(FunctionType function_ = {}, Value *this_obj = nullptr, Closure closure_ = {});
+		Function(FunctionType function_ = {}, Reference *this_obj = nullptr, Closure closure_ = {});
 		/** This doesn't deep-clone thisObj. */
 		Value * copy() const override { return (new Function(function, thisObj, closure))->setContext(*context); }
 		std::unordered_set<Value *> getReferents() const override;

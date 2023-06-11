@@ -54,7 +54,15 @@ $(PARSERCPP:.cpp=.o): $(PARSERCPP) $(PARSERHDR)
 	$(COMPILER) $(CFLAGS) $(LEXFLAGS) -c $< -o $@
 
 test: $(OUTPUT)
-	./$(OUTPUT) < js/gc.js
+	./$(OUTPUT) < js/objects.js
+
+define newline
+
+
+endef
+
+fulltest: $(OUTPUT)
+	$(foreach file,$(wildcard js/*.js),@ printf "\x1b[35m$(file)\x1b[39m\n" $(newline) @ ./$(OUTPUT) < $(file) $(newline))
 
 clean:
 	rm -f $(OUTPUT) src/*.o src/**/*.o PVS-Studio.log report.tasks strace_out

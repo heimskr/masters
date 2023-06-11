@@ -794,14 +794,14 @@ body(std::make_unique<Block>(*node.at(1))) {
 }
 
 Value * FunctionExpression::evaluate(Context &context) {
-	Value **this_obj = nullptr;
+	Reference *this_obj = nullptr;
 
 	if (context.nextThis != nullptr)
-		this_obj = &context.nextThis;
+		this_obj = context.nextThis;
 	else
-		context.stack.lookup("this");
+		this_obj = context.stack.lookup("this");
 
-	return context.makeValue<Function>([this](Context &context, const std::vector<Value *> &argument_values, Value *this_obj) {
+	return context.makeValue<Function>([this](Context &context, const std::vector<Value *> &argument_values, Reference *this_obj) {
 		context.stack.push();
 
 		size_t i = 0;
@@ -819,14 +819,16 @@ Value * FunctionExpression::evaluate(Context &context) {
 
 		context.stack.insert("arguments", context.makeValue<Array>(argument_references));
 		if (this_obj != nullptr)
-			context.stack.insert("this", this_obj);
+			context.stack.insert("this", this_obj->referent);
+		else
+			WARN("this_obj is null");
 
 		const auto [result, value] = body->interpret(context);
 
 		context.stack.pop();
 
 		return value;
-	}, this_obj != nullptr? *this_obj : nullptr, assembleClosure(context));
+	}, this_obj, assembleClosure(context));
 }
 
 std::pair<Result, Value *> FunctionExpression::interpret(Context &context) {
@@ -849,6 +851,8 @@ Closure FunctionExpression::assembleClosure(Context &context) const {
 	std::unordered_set<std::string> killed;
 
 	for (const auto &[was_killed, variable]: usages) {
+		if (variable == "this")
+			continue;
 		if (was_killed) {
 			killed.insert(variable);
 		} else if (!killed.contains(variable)) {
@@ -877,7 +881,7 @@ ObjectExpression::ObjectExpression(const ASTNode &node) {
 Value * ObjectExpression::evaluate(Context &context) {
 	auto *out = context.makeValue<Object>();
 	FieldSaver saver(context, &Context::nextThis);
-	context.nextThis = out;
+	context.nextThis = context.makeReference(out);
 	for (const auto &[key, expression]: map)
 		out->map[key] = context.makeReference(expression->evaluate(context));
 	return out;

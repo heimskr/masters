@@ -164,7 +164,7 @@ full_var_def: var_type var_def_list { $$ = $1->adopt($2); };
 var_def_list: var_def_list "," var_def { $$ = $1->adopt($3); D($2); }
             | var_def { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); };
 
-var_def: ident "=" expr { $$ = $1->adopt($3); D($2); }
+var_def: ident "=" full_expr { $$ = $1->adopt($3); D($2); }
        | ident;
 
 var_type: "let" | "const";
@@ -186,6 +186,8 @@ while_loop: "while" "(" expr ")" statement          { $$ = $1->adopt({$3, $5}); 
 for_loop: "for" "(" for_start ";" expr_with_comma_ ";" expr_with_comma_ ")" statement { $$ = $1->adopt({$3, $5, $7, $9}); D($2, $4, $6, $8); };
 
 expr_: expr | { $$ = new ASTNode(jsParser, JS_EMPTY); };
+
+full_expr_: full_expr | { $$ = new ASTNode(jsParser, JS_EMPTY); };
 
 expr_with_comma_: expr_with_comma | { $$ = new ASTNode(jsParser, JS_EMPTY); };
 
@@ -246,7 +248,6 @@ expr: expr "&&"   expr { $$ = $2->adopt({$1, $3}); }
     | string
     | number
     | function
-    | object
     | array
     | "new" expr "(" exprlist_ ")" %prec NEW_ARGS { $$ = $1->adopt({$2, $4}); D($3, $5); }
     | "new" expr %prec NEW_NO_ARGS { $$ = $1->adopt($2); }
@@ -259,8 +260,10 @@ expr: expr "&&"   expr { $$ = $2->adopt({$1, $3}); }
     | "Infinity"
     | "arguments";
 
-expr_with_comma: expr
-               | expr_with_comma "," expr { $$ = $2->adopt({$1, $3}); };
+full_expr: expr | object;
+
+expr_with_comma: full_expr
+               | expr_with_comma "," full_expr { $$ = $2->adopt({$1, $3}); };
 
 string: JSTOK_STRING;
 
@@ -291,14 +294,14 @@ object_list: object_list "," object_item { $$ = $1->adopt($3); D($2); }
            | object_item { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); };
 
 object_item: ident { $$ = $1->adopt($1->copy()); }
-           | ident ":" expr { $$ = $1->adopt($3); D($2); };
+           | ident ":" full_expr { $$ = $1->adopt($3); D($2); };
 
 array: "[" "]" { $$ = $1; $$->symbol = JS_ARRAY; D($2); }
      | "[" array_list "]" { $$ = $1->adopt($2); $$->symbol = JS_ARRAY; D($3); }
 
-array_list: expr { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); }
+array_list: full_expr { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); }
           | { $$ = (new ASTNode(jsParser, JS_LIST))->adopt(new ASTNode(jsParser, JS_EMPTY)); }
-          | array_list "," expr_ { $$ = $1->adopt($3); D($2); };
+          | array_list "," full_expr_ { $$ = $1->adopt($3); D($2); };
 
 %%
 
