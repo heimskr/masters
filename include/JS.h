@@ -43,11 +43,30 @@ class ScopeStack {
 		friend class Context;
 };
 
+class Globals {
+	private:
+		std::unordered_set<Value *> values;
+
+	public:
+		Globals() = default;
+
+		inline void insert(Value *value) {
+			values.insert(value);
+		}
+
+		bool contains(Value *) const;
+
+		inline auto size()  const { return values.size();  }
+		inline auto empty() const { return values.empty(); }
+		inline auto begin() const { return values.begin(); }
+		inline auto end()   const { return values.end();   }
+};
+
 class Context {
 	public:
 		std::unordered_set<Value *> valuePool;
-		std::unordered_set<Value *> globalValues;
 		ScopeStack stack;
+		Globals globals;
 		size_t lineNumber = 0;
 		size_t columnNumber = 0;
 		bool writingMember = false;
@@ -86,8 +105,9 @@ class Context {
 			if (stack.globals.contains(name))
 				throw std::runtime_error("Context already contains global \"" + name + '"');
 
-			stack.globals.emplace(name, makeValue<Reference>(value));
-			globalValues.insert(value);
+			auto *reference = makeReference(value);
+			stack.globals.emplace(name, reference);
+			globals.insert(value);
 			valuePool.insert(value);
 		}
 

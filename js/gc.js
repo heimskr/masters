@@ -9,4 +9,6 @@ let fn = function() { print("This should've been overwritten"); };
 }
 
 fn();
-// gc();
+print(gc() + " GC'd");
+print(gc() + " GC'd");
+fn();

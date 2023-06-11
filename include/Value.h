@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <functional>
+#include <iostream>
 #include <map>
 #include <string>
 #include <unordered_set>
@@ -63,6 +64,16 @@ class Value {
 		virtual Value * operator<<(const Value &) const;
 		virtual Value * shiftRightLogical(const Value &) const;
 		virtual Value * shiftRightArithmetic(const Value &) const;
+
+		template <typename T>
+		T * cast() {
+			return dynamic_cast<T *>(this);
+		}
+
+		template <typename T>
+		const T * cast() const {
+			return dynamic_cast<const T *>(this);
+		}
 
 		template <typename T, typename... Args>
 		T * make(Args &&...args) const;

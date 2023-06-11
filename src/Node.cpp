@@ -528,6 +528,8 @@ void UnaryExpression::findVariables(std::vector<VariableUsage> &usages) const {
 //
 
 std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
+	std::unique_ptr<Expression> out;
+
 	switch (node.symbol) {
 		case JSTOK_TEQ:
 		case JSTOK_NTEQ:
@@ -541,62 +543,79 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_EXP:
 		case JSTOK_ASSIGN:
 		case JSTOK_COMMA:
-			return std::make_unique<BinaryExpression>(node);
+			out = std::make_unique<BinaryExpression>(node);
 
 		case JSTOK_PLUS:
 		case JSTOK_MINUS:
 			if (node.size() == 1)
-				return std::make_unique<UnaryExpression>(node);
-			return std::make_unique<BinaryExpression>(node);
+				out = std::make_unique<UnaryExpression>(node);
+			out = std::make_unique<BinaryExpression>(node);
+			break;
 
 		case JSTOK_PLUSPLUS:
 		case JS_POSTPLUS:
 		case JSTOK_MINUSMINUS:
 		case JS_POSTMINUS:
 		case JSTOK_NOT:
-			return std::make_unique<UnaryExpression>(node);
+			out = std::make_unique<UnaryExpression>(node);
+			break;
 
 		case JSTOK_IDENT:
-			return std::make_unique<Identifier>(node);
+			out = std::make_unique<Identifier>(node);
+			break;
 
 		case JSTOK_NUMBER:
-			return std::make_unique<NumberLiteral>(node);
+			out = std::make_unique<NumberLiteral>(node);
+			break;
 
 		case JSTOK_STRING:
-			return std::make_unique<StringLiteral>(node);
+			out = std::make_unique<StringLiteral>(node);
+			break;
 
 		case JSTOK_UNDEFINED:
-			return std::make_unique<UndefinedLiteral>(node);
+			out = std::make_unique<UndefinedLiteral>(node);
+			break;
 
 		case JSTOK_NULL:
-			return std::make_unique<NullLiteral>(node);
+			out = std::make_unique<NullLiteral>(node);
+			break;
 
 		case JSTOK_LPAREN:
-			return std::make_unique<FunctionCall>(node);
+			out = std::make_unique<FunctionCall>(node);
+			break;
 
 		case JSTOK_TRUE:
 		case JSTOK_FALSE:
-			return std::make_unique<BooleanLiteral>(node);
+			out = std::make_unique<BooleanLiteral>(node);
+			break;
 
 		case JSTOK_FUNCTION:
-			return std::make_unique<FunctionExpression>(node);
+			out = std::make_unique<FunctionExpression>(node);
+			break;
 
 		case JS_OBJECT:
-			return std::make_unique<ObjectExpression>(node);
+			out = std::make_unique<ObjectExpression>(node);
+			break;
 
 		case JSTOK_PERIOD:
-			return std::make_unique<DotExpression>(node);
+			out = std::make_unique<DotExpression>(node);
+			break;
 
 		case JS_ARRAY:
-			return std::make_unique<ArrayExpression>(node);
+			out = std::make_unique<ArrayExpression>(node);
+			break;
 
 		case JSTOK_LSQUARE:
-			return std::make_unique<AccessExpression>(node);
+			out = std::make_unique<AccessExpression>(node);
+			break;
 
 		default:
 			node.debug();
 			throw std::invalid_argument("Unhandled symbol in Expression::create: " + std::string(node.getName()));
 	}
+
+	out->absorbPosition(node);
+	return out;
 }
 
 //
@@ -604,31 +623,44 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 //
 
 std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
+	std::unique_ptr<Statement> out;
+
 	switch (node.symbol) {
 		case JSTOK_LET:
 		case JSTOK_CONST:
 		case JSTOK_VAR:
-			return std::make_unique<VariableDefinitions>(node);
+			out = std::make_unique<VariableDefinitions>(node);
+			break;
 		case JSTOK_IF:
-			return std::make_unique<IfStatement>(node);
+			out = std::make_unique<IfStatement>(node);
+			break;
 		case JSTOK_WHILE:
-			return std::make_unique<WhileLoop>(node);
+			out = std::make_unique<WhileLoop>(node);
+			break;
 		case JSTOK_CONTINUE:
-			return std::make_unique<Continue>();
+			out = std::make_unique<Continue>();
+			break;
 		case JSTOK_BREAK:
-			return std::make_unique<Break>();
+			out = std::make_unique<Break>();
+			break;
 		case JSTOK_RETURN:
-			return std::make_unique<Return>(node);
+			out = std::make_unique<Return>(node);
+			break;
 		case JS_BLOCK:
-			return std::make_unique<Block>(node);
+			out = std::make_unique<Block>(node);
+			break;
 		case JSTOK_LPAREN:
 		case JSTOK_FUNCTION:
 		case JSTOK_ASSIGN:
-			return Expression::create(node);
+			out = Expression::create(node);
+			break;
 		default:
 			node.debug();
 			throw std::invalid_argument("Unhandled symbol in Statement::create: " + std::string(node.getName()));
 	}
+
+	out->absorbPosition(node);
+	return out;
 }
 
 //

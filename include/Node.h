@@ -249,6 +249,7 @@ class WhileLoop: public Statement {
 class Continue: public Statement {
 	public:
 		Continue() = default;
+		Continue(const ASTNode &node) { absorbPosition(node); }
 		NodeType getType() const override { return NodeType::Continue; }
 		std::pair<Result, Value *> interpret(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override {}
@@ -257,6 +258,7 @@ class Continue: public Statement {
 class Break: public Statement {
 	public:
 		Break() = default;
+		Break(const ASTNode &node) { absorbPosition(node); }
 		NodeType getType() const override { return NodeType::Break; }
 		std::pair<Result, Value *> interpret(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override {}

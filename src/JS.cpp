@@ -50,6 +50,21 @@ bool ScopeStack::inLastScope(const std::string &name) const {
 	return !scopes.empty() && scopes.back().store.contains(name);
 }
 
+bool Globals::contains(Value *value) const {
+	if (values.contains(value))
+		return true;
+
+	for (auto *reference = value->cast<Reference>(); reference != nullptr; reference = reference->referent->cast<Reference>()) {
+		if (values.contains(reference->referent))
+			return true;
+		// Won't prevent a cycle containing more than two nodes. Shouldn't ever come up anyway.
+		if (reference->referent == reference)
+			break;
+	}
+
+	return false;
+}
+
 void Context::addDefaults() {
 	makeGlobal<Object>("this");
 
@@ -81,13 +96,13 @@ void Context::garbageCollect() {
 		for (const auto &[name, reference]: scope.store)
 			visit(reference);
 
-	for (const auto &value: globalValues)
+	for (const auto &value: globals)
 		visit(value);
 
 	std::vector<Value *> unmarked;
 
 	for (const auto &value: valuePool)
-		if (!marked.contains(value) && !globalValues.contains(value))
+		if (!marked.contains(value) && !globals.contains(value))
 			unmarked.push_back(value);
 
 	for (Value *value: unmarked) {
