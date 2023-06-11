@@ -549,7 +549,8 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_MINUS:
 			if (node.size() == 1)
 				out = std::make_unique<UnaryExpression>(node);
-			out = std::make_unique<BinaryExpression>(node);
+			else
+				out = std::make_unique<BinaryExpression>(node);
 			break;
 
 		case JSTOK_PLUSPLUS:
