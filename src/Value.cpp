@@ -189,6 +189,21 @@ Number * Object::toNumber() const {
 	return make<Number>(nan(""));
 }
 
+Object::operator std::string() const {
+	std::stringstream ss;
+	ss << '{';
+	bool first = true;
+	for (const auto &[key, value]: map) {
+		if (first)
+			first = false;
+		else
+			ss << ", ";
+		ss << key << ": " << static_cast<std::string>(*value);
+	}
+	ss << '}';
+	return ss.str();
+}
+
 std::unordered_set<Value *> Object::getReferents() const {
 	std::unordered_set<Value *> out;
 	out.reserve(map.size());

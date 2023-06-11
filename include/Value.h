@@ -165,7 +165,7 @@ class Object: public Value {
 		Number * toNumber() const override;
 		std::string getName() const override { return "Object"; }
 		bool subscriptable() const override { return true; }
-		explicit operator std::string() const override { return "[object Object]"; }
+		explicit operator std::string() const override;
 		explicit operator double() const override { return nan(""); }
 		explicit operator bool() const override { return true; }
 		VALUE_OPERATOR_OVERRIDES
@@ -219,12 +219,23 @@ class String: public Value {
 		VALUE_USING
 };
 
+struct ReferenceContext {
+	Reference *thisObj = nullptr;
+};
+
 class Reference: public Value {
 	public:
 		Value *referent;
 		bool isConst;
+		ReferenceContext referenceContext {};
+
 		Reference() = delete;
 		Reference(Value *referent_, bool is_const = false): referent(referent_), isConst(is_const) {}
+
+		template <typename... Args>
+		Reference(Value *referent_, bool is_const, Args &&...args):
+			referent(referent_), isConst(is_const), referenceContext{std::forward<Args>(args)...} {}
+
 		/** Note: this creates a copy of the referred-to value, not of the reference! */
 		Value * copy() const override { assertReferent(); return referent->copy(); }
 		ValueType getType() const override { return ValueType::Reference; }

@@ -759,7 +759,7 @@ Value * FunctionCall::evaluate(Context &context) {
 	assert(evaluated_function != nullptr);
 
 	if (evaluated_function->ultimateType() != ValueType::Function)
-		throw TypeError('"' + static_cast<std::string>(*evaluated_function) + "\" is not a function");
+		throw TypeError("Value " + static_cast<std::string>(*evaluated_function) + " is not a function");
 
 	auto &cast_function = dynamic_cast<Function &>(*evaluated_function->ultimateValue());
 	FieldSaver saved_function(context, &Context::currentFunction);
@@ -771,8 +771,14 @@ Value * FunctionCall::evaluate(Context &context) {
 	for (const auto &argument: arguments)
 		argument_values.emplace_back(argument->evaluate(context));
 
+	Reference *this_obj = cast_function.thisObj;
+
+	if (auto *evaluated_reference = evaluated_function->cast<Reference>())
+		if (auto *this_from_object = evaluated_reference->referenceContext.thisObj)
+			this_obj = this_from_object;
+
 	ClosureGuard guard(context, cast_function.closure);
-	return cast_function.function(context, argument_values, cast_function.thisObj);
+	return cast_function.function(context, argument_values, this_obj);
 }
 
 void FunctionCall::findVariables(std::vector<VariableUsage> &usages) const {
@@ -952,15 +958,18 @@ Value * DotExpression::evaluate(Context &context) {
 	}
 
 	// TODO: update when boxing support is added
-	if (lhs->ultimateType() != ValueType::Object)
+	if (lhs->ultimateType() != ValueType::Object) {
+		WARN("LHS type: " << lhs->getName());
 		throw TypeError("Can't use . operator on non-object", location);
+	}
 
 	auto *object = dynamic_cast<Object *>(lhs->ultimateValue());
 
 	if (auto iter = object->map.find(ident); iter != object->map.end())
-		return context.makeValue<Reference>(iter->second, false);
+		return iter->second;
 
-	auto *undefined_ref = context.makeReference<Undefined>();
+	auto *undefined_ref = context.makeValue<Reference>(context.makeValue<Undefined>(), false,
+		context.makeReference(object));
 
 	if (context.writingMember)
 		return object->map[ident] = undefined_ref;
@@ -1009,7 +1018,8 @@ Value * AccessExpression::evaluate(Context &context) {
 			if (auto iter = object->map.find(stringified); iter != object->map.end())
 				return iter->second;
 
-			auto *undefined_ref = context.makeReference<Undefined>();
+			auto *undefined_ref = context.makeValue<Reference>(context.makeValue<Undefined>(), false,
+				context.makeReference(object));
 
 			if (context.writingMember)
 				return object->map[stringified] = undefined_ref;

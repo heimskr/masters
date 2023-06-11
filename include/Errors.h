@@ -18,7 +18,7 @@ struct JSError: std::runtime_error {
 		column(column_) {}
 
 	JSError(std::string message, const ASTLocation &location):
-		JSError(std::move(message), location.line, location.column) {}
+		JSError(std::move(message), location.line + 1, location.column + 1) {}
 };
 
 struct GenericError: std::runtime_error {

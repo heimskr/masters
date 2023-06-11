@@ -11,5 +11,15 @@ let obj = {
 	}
 };
 
-print(obj.f(obj.b.c));
-this.obj = obj;
+print(obj.f(obj.b["c"]));
+
+this.isGlobal = true;
+
+function foo() {
+	print(this.b.c * 10);
+};
+
+obj.foo = foo;
+
+obj.foo();
+obj["foo"]();
