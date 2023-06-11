@@ -243,7 +243,7 @@ Value * String::operator+(const Value &other) const {
 		case ValueType::String:
 			return make<String>(string + dynamic_cast<const String &>(other).string);
 		case ValueType::Number:
-			return make<String>(string + std::to_string(dynamic_cast<const Number &>(other).number));
+			return make<String>(string + static_cast<std::string>(other));
 		case ValueType::Reference:
 			return *this + *dynamic_cast<const Reference &>(other).referent;
 		default:
