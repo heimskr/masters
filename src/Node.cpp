@@ -356,49 +356,20 @@ Value * BinaryExpression::evaluate(Context &context) {
 	}
 }
 
-std::variant<Value **, Value *> BinaryExpression::access(Context &context, bool *is_const) {
-	Value *lhs = left->evaluate(context);
-
-	// TODO: update when boxing support is added
-	if (lhs->getType() != ValueType::Reference && lhs->getType() != ValueType::Object)
-		throw TypeError("Can't assign to field of value of type " + lhs->getName());
-
-	auto *reference =dynamic_cast<Reference *>(lhs);
-
-	if (is_const != nullptr) {
-		if (reference != nullptr)
-			*is_const = reference->isConst;
-		else
-			*is_const = false;
-	}
-
-	// Object is a reference to something that already exists somewhere
-	if (reference != nullptr)
-		return reference->referent;
-
-	// Object is temporary
-	return lhs;
-}
-
 Value * BinaryExpression::evaluateAccess(Context &context) {
 	auto saver = context.writeMember();
 
 	bool is_const = false;
 
-	Value *temporary = nullptr;
-	Value **accessed = nullptr;
+	Value *lhs = left->evaluate(context);
+	auto *reference = dynamic_cast<Reference *>(lhs);
 
-	auto variant = access(context, &is_const);
-
-	if (std::holds_alternative<Value **>(variant)) {
-		accessed = std::get<Value **>(variant);
-	} else {
-		temporary = std::get<Value *>(variant);
-		accessed = &temporary;
+	if (!reference) {
+		WARN("LHS of BinaryExpression isn't a reference, but instead " << lhs->getName());
+		return right->evaluate(context);
 	}
 
-	assert(accessed != nullptr);
-	assert(*accessed != nullptr);
+	assert(reference != nullptr);
 
 	if (is_const)
 		throw JSError("Can't assign to const variable");
@@ -407,35 +378,50 @@ Value * BinaryExpression::evaluateAccess(Context &context) {
 
 	switch (type) {
 		case Type::Assignment:
-			return *accessed = right_value;
+			reference->referent = right_value;
+			return reference;
 		case Type::AdditionAssignment:
-			return *accessed = **accessed + *right_value;
+			reference->referent = *reference + *right_value;
+			return reference;
 		case Type::SubtractionAssignment:
-			return *accessed = **accessed - *right_value;
+			reference->referent = *reference - *right_value;
+			return reference;
 		case Type::MultiplicationAssignment:
-			return *accessed = **accessed * *right_value;
+			reference->referent = *reference * *right_value;
+			return reference;
 		case Type::DivisionAssignment:
-			return *accessed = **accessed / *right_value;
+			reference->referent = *reference / *right_value;
+			return reference;
 		case Type::ModuloAssignment:
-			return *accessed = **accessed % *right_value;
+			reference->referent = *reference % *right_value;
+			return reference;
 		case Type::BitwiseAndAssignment:
-			return *accessed = **accessed & *right_value;
+			reference->referent = *reference & *right_value;
+			return reference;
 		case Type::BitwiseOrAssignment:
-			return *accessed = **accessed | *right_value;
+			reference->referent = *reference | *right_value;
+			return reference;
 		case Type::BitwiseXorAssignment:
-			return *accessed = **accessed ^ *right_value;
+			reference->referent = *reference ^ *right_value;
+			return reference;
 		case Type::ExponentiationAssignment:
-			return *accessed = (*accessed)->power(*right_value);
+			reference->referent = reference->power(*right_value);
+			return reference;
 		case Type::LogicalAndAssignment:
-			return *accessed = **accessed && *right_value;
+			reference->referent = *reference && *right_value;
+			return reference;
 		case Type::LogicalOrAssignment:
-			return *accessed = **accessed || *right_value;
+			reference->referent = *reference || *right_value;
+			return reference;
 		case Type::LeftShiftAssignment:
-			return *accessed = **accessed << *right_value;
+			reference->referent = *reference << *right_value;
+			return reference;
 		case Type::RightShiftArithmeticAssignment:
-			return *accessed = (*accessed)->shiftRightArithmetic(*right_value);
+			reference->referent = reference->shiftRightArithmetic(*right_value);
+			return reference;
 		case Type::RightShiftLogicalAssignment:
-			return *accessed = (*accessed)->shiftRightLogical(*right_value);
+			reference->referent = reference->shiftRightLogical(*right_value);
+			return reference;
 		default:
 			throw std::logic_error("Unsupported assignment operator: " + std::to_string(static_cast<int>(type)));
 	}

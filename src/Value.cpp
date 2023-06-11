@@ -244,6 +244,8 @@ Value * String::operator+(const Value &other) const {
 			return make<String>(string + dynamic_cast<const String &>(other).string);
 		case ValueType::Number:
 			return make<String>(string + std::to_string(dynamic_cast<const Number &>(other).number));
+		case ValueType::Reference:
+			return *this + *dynamic_cast<const Reference &>(other).referent;
 		default:
 			throw TypeError("Invalid string concatenation");
 	}

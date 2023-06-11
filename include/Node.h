@@ -143,8 +143,6 @@ class BinaryExpression: public Expression {
 		static std::unordered_set<Type> assignmentTypes;
 
 	private:
-		/** Returns a Value ** for a reference, or a Value * for a temporary. */
-		std::variant<Value **, Value *> access(Context &, bool *is_const = nullptr);
 		Value * evaluateAccess(Context &);
 };
 
