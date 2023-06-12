@@ -178,7 +178,7 @@ void Context::addDefaults() {
 			if (!args.empty()) {
 				search_string = static_cast<std::string>(*args.front());
 				if (2 <= args.size()) {
-					if (auto number = static_cast<double>(*args[1]); isFinite(number))
+					if (const auto number = static_cast<double>(*args[1]); isFinite(number))
 						expected = static_cast<size_t>(number);
 					else
 						expected = 0;
@@ -194,6 +194,17 @@ void Context::addDefaults() {
 				return context.toValue(false);
 			}
 		}}},
+	});
+	(*string)["fromCharCode"] = makeReference<Function>([](Context &context, const auto &args, auto) {
+		std::string out;
+		for (const Value *arg: args) {
+			size_t char_code = 0;
+			if (const auto number = static_cast<double>(*arg); isFinite(number))
+				char_code = static_cast<size_t>(number);
+			assert(char_code <= 255);
+			out += static_cast<char>(char_code);
+		}
+		return context.makeValue<String>(std::move(out));
 	});
 }
 

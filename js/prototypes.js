@@ -35,3 +35,8 @@ print("2".endsWith("2", 2));
 print("".endsWith(""));
 print("".endsWith("", NaN));
 print("".endsWith("", Infinity));
+print(String.fromCharCode(100) === "d");
+print(String.fromCharCode(101) !== "d");
+print(String.fromCharCode(100, 101, 97, 100, "98", 101, 101, 102) === "deadbeef");
+print(String.fromCharCode() === "");
+print(!String.fromCharCode());
