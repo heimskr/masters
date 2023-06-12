@@ -38,308 +38,133 @@ const char * stringify(NodeType type) {
 	}
 }
 
-//   _   _           _
-//  | \ | |         | |
-//  |  \| | ___   __| | ___
-//  | . ` |/ _ \ / _` |/ _ \
-//  | |\  | (_) | (_| |  __/
-//  |_| \_|\___/ \__,_|\___|
+//                                 ______                              _
+//      /\                        |  ____|                            (_)
+//     /  \   ___ ___ ___  ___ ___| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//    / /\ \ / __/ __/ _ \/ __/ __|  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//   / ____ \ (_| (_|  __/\__ \__ \ |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//  /_/    \_\___\___\___||___/___/______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//                                            | |
+//                                            |_|
 
-void Node::assertType(NodeType type) {
-	if (getType() != type)
-		throw std::runtime_error("Assertion failed: " + std::string(typeid(*this).name()) + " at [" +
-			static_cast<std::string>(location) + "] is not an instance of " + stringify(type));
-}
+AccessExpression::AccessExpression(const ASTNode &node):
+	base(Expression::create(*node.at(0))),
+	subscript(Expression::create(*node.at(1))) { absorbPosition(node); }
 
-std::unique_ptr<Node> Node::fromAST(const ASTNode &node) {
-	throw std::invalid_argument("Node::fromAST failed: symbol \"" + std::string(node.getName()) + "\" not handled");
-}
+Value * AccessExpression::evaluate(Context &context) {
+	Value *lhs = nullptr;
+	Value *rhs = nullptr;
 
-void Node::absorbPosition(const ASTNode &node) {
-	location = node.location;
-}
-
-//   _____
-//  |  __ \
-//  | |__) | __ ___   __ _ _ __ __ _ _ __ ___
-//  |  ___/ '__/ _ \ / _` | '__/ _` | '_ ` _ \
-//  | |   | | | (_) | (_| | | | (_| | | | | | |
-//  |_|   |_|  \___/ \__, |_|  \__,_|_| |_| |_|
-//                    __/ |
-//                   |___/
-
-Program::Program(const ASTNode &node) {
-	absorbPosition(node);
-
-	for (const auto *subnode: node)
-		body.emplace_back(Statement::create(*subnode));
-}
-
-std::pair<Result, Value *> Program::interpret(Context &context) {
-	context.stack.push();
-
-	for (auto &node: body) {
-		const auto [result, value] = node->interpret(context);
-
-		if (result == Result::Return)
-			return std::make_pair(result, value);
-
-		if (result == Result::Break)
-			throw JSError("Invalid break statement", node->location);
-
-		if (result == Result::Continue)
-			throw JSError("Invalid continue statement", node->location);
+	{
+		auto saver = context.writeMember(false);
+		lhs = base->evaluate(context);
+		assert(lhs != nullptr);
 	}
 
-	context.stack.pop();
-	return {Result::None, nullptr};
+	if (!lhs->subscriptable())
+		throw TypeError("Can't use [] operator on non-object/array/string (" + lhs->getName() + ')', location);
+
+	{
+		auto saver = context.writeMember(false);
+		rhs = subscript->evaluate(context);
+		assert(rhs != nullptr);
+	}
+
+	switch (lhs->ultimateType()) {
+		case ValueType::Object:
+			return access(context, lhs->ultimateValue(), static_cast<std::string>(*rhs));
+
+		case ValueType::Array: {
+			auto *reference = dynamic_cast<Reference *>(lhs);
+			auto &array = dynamic_cast<Array &>(*lhs->ultimateValue());
+
+			if (reference == nullptr)
+				return context.makeValue<Undefined>();
+
+			bool is_int = false;
+			size_t index = -1;
+
+			if (rhs->ultimateType() == ValueType::Number) {
+				double number = static_cast<double>(*rhs->ultimateValue());
+				double intpart = 0.;
+				if (modf(number, &intpart) == 0) {
+					is_int = true;
+					index = static_cast<size_t>(intpart);
+				}
+			}
+
+			if (!is_int) {
+				const auto stringified = static_cast<std::string>(*rhs);
+				reference->referent = context.makeValue<Object>(array);
+			} else if (context.writingMember) {
+				return array.fetchOrMake(index);
+			} else {
+				if (auto *fetched = array[index])
+					return fetched;
+				return context.makeReference<Undefined>();
+			}
+
+			return reference;
+		}
+
+		default:
+			throw TypeError("Can't use [] operator on unsupported value (" + rhs->getName() + ')', location);
+	}
 }
 
-//   ____  _            _
-//  |  _ \| |          | |
-//  | |_) | | ___   ___| | __
-//  |  _ <| |/ _ \ / __| |/ /
-//  | |_) | | (_) | (__|   <
-//  |____/|_|\___/ \___|_|\_\.
-
-Block::Block(const ASTNode &node) {
-	absorbPosition(node);
-
-	for (const auto *subnode: node)
-		body.emplace_back(Statement::create(*subnode));
+void AccessExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	assert(base != nullptr);
+	assert(subscript != nullptr);
+	base->findVariables(usages);
+	subscript->findVariables(usages);
 }
 
-std::pair<Result, Value *> Block::interpret(Context &context) {
-	context.stack.push();
+//                                 ______                              _
+//      /\                        |  ____|                            (_)
+//     /  \   _ __ _ __ __ _ _   _| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//    / /\ \ | '__| '__/ _` | | | |  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//   / ____ \| |  | | | (_| | |_| | |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//  /_/    \_\_|  |_|  \__,_|\__, |______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//                            __/ |           | |
+//                           |___/            |_|
 
-	for (auto &node: body) {
-		const auto [result, value] = node->interpret(context);
-		if (result != Result::None) {
-			context.stack.pop();
-			return {result, value};
+ArrayExpression::ArrayExpression(const ASTNode &node) {
+	if (!node.empty()) {
+		for (const auto &subnode: *node.front()) {
+			if (subnode->symbol == JS_EMPTY) {
+				isHoley = true;
+				expressions.emplace_back(nullptr);
+			} else {
+				expressions.push_back(Expression::create(*subnode));
+			}
 		}
 	}
-
-	context.stack.pop();
-	return {Result::None, nullptr};
 }
 
-void Block::findVariables(std::vector<VariableUsage> &usages) const {
-	for (const auto &node: body)
-		node->findVariables(usages);
-}
-
-//  __      __        _       _     _      _____        __ _       _ _   _
-//  \ \    / /       (_)     | |   | |    |  __ \      / _(_)     (_) | (_)
-//   \ \  / /_ _ _ __ _  __ _| |__ | | ___| |  | | ___| |_ _ _ __  _| |_ _  ___  _ __
-//    \ \/ / _` | '__| |/ _` | '_ \| |/ _ \ |  | |/ _ \  _| | '_ \| | __| |/ _ \| '_ \
-//     \  / (_| | |  | | (_| | |_) | |  __/ |__| |  __/ | | | | | | | |_| | (_) | | | |
-//      \/ \__,_|_|  |_|\__,_|_.__/|_|\___|_____/ \___|_| |_|_| |_|_|\__|_|\___/|_| |_|
-
-VariableDefinition::VariableDefinition(const ASTNode &node):
-	ident(*node.text),
-	value(node.empty()? nullptr : Expression::create(*node.front())) { absorbPosition(node); }
-
-std::pair<Result, Value *> VariableDefinition::interpret(Context &) {
-	throw Unimplemented();
-}
-
-void VariableDefinition::findVariables(std::vector<VariableUsage> &usages) const {
-	usages.emplace_back(true, ident);
-}
-
-//  __      __        _       _     _      _____        __ _       _ _   _
-//  \ \    / /       (_)     | |   | |    |  __ \      / _(_)     (_) | (_)
-//   \ \  / /_ _ _ __ _  __ _| |__ | | ___| |  | | ___| |_ _ _ __  _| |_ _  ___  _ __  ___
-//    \ \/ / _` | '__| |/ _` | '_ \| |/ _ \ |  | |/ _ \  _| | '_ \| | __| |/ _ \| '_ \/ __|
-//     \  / (_| | |  | | (_| | |_) | |  __/ |__| |  __/ | | | | | | | |_| | (_) | | | \__ \
-//      \/ \__,_|_|  |_|\__,_|_.__/|_|\___|_____/ \___|_| |_|_| |_|_|\__|_|\___/|_| |_|___/
-
-VariableDefinitions::VariableDefinitions(const ASTNode &node): kind(getKind(node.at(0)->symbol)) {
-	absorbPosition(node);
-
-	for (const auto *subnode: *node.front())
-		definitions.push_back(std::make_unique<VariableDefinition>(*subnode));
-}
-
-std::pair<Result, Value *> VariableDefinitions::interpret(Context &context) {
-	for (const auto &definition: definitions) {
-		const auto &name = definition->ident;
-		const bool must_be_unique = kind == DeclarationKind::Let || kind == DeclarationKind::Const;
-
-		if (must_be_unique && context.stack.inLastScope(name))
-			throw std::runtime_error("Name \"" + name + "\" already exists in deepest scope");
-
-		if (definition->value) {
-			Value *evaluated =definition->value->evaluate(context);
-			assert(evaluated != nullptr);
-			context.stack.insert(name, evaluated);
-		} else {
-			context.stack.insert(name, context.makeValue<Undefined>());
+Value * ArrayExpression::evaluate(Context &context) {
+	if (isHoley) {
+		std::map<size_t, Reference *> map;
+		size_t i = 0;
+		for (const auto &expression: expressions) {
+			if (expression)
+				map[i] = context.makeReference(expression->evaluate(context));
+			++i;
 		}
+		return context.makeValue<Array>(std::move(map), i);
 	}
 
-	return {Result::None, nullptr};
-}
-
-void VariableDefinitions::findVariables(std::vector<VariableUsage> &usages) const {
-	for (const auto &definition: definitions)
-		definition->findVariables(usages);
-}
-
-void VariableDefinitions::validateInSingleStatementContext() const {
-	if (kind == DeclarationKind::Let || kind == DeclarationKind::Const)
-		throw SyntaxError("Lexical declaration cannot appear in a single-statement context");
-}
-
-//   _____  __ _____ _        _                            _
-//  |_   _|/ _/ ____| |      | |                          | |
-//    | | | || (___ | |_ __ _| |_ ___ _ __ ___   ___ _ __ | |_
-//    | | |  _\___ \| __/ _` | __/ _ \ '_ ` _ \ / _ \ '_ \| __|
-//   _| |_| | ____) | || (_| | ||  __/ | | | | |  __/ | | | |_
-//  |_____|_||_____/ \__\__,_|\__\___|_| |_| |_|\___|_| |_|\__|
-
-IfStatement::IfStatement(const ASTNode &node):
-	condition(Expression::create(*node.at(0))),
-	consequent(Statement::create(*node.at(1))),
-	alternate(2 < node.size()? Statement::create(*node.at(2)) : nullptr) { absorbPosition(node); }
-
-std::pair<Result, Value *> IfStatement::interpret(Context &context) {
-	if (*condition->evaluate(context))
-		return consequent->interpret(context);
-	if (alternate)
-		return alternate->interpret(context);
-	return {Result::None, nullptr};
-}
-
-void IfStatement::findVariables(std::vector<VariableUsage> &usages) const {
-	assert(condition);
-	condition->findVariables(usages);
-}
-
-//  __          ___     _ _      _
-//  \ \        / / |   (_) |    | |
-//   \ \  /\  / /| |__  _| | ___| |     ___   ___  _ __
-//    \ \/  \/ / | '_ \| | |/ _ \ |    / _ \ / _ \| '_ \
-//     \  /\  /  | | | | | |  __/ |___| (_) | (_) | |_) |
-//      \/  \/   |_| |_|_|_|\___|______\___/ \___/| .__/
-//                                                | |
-//                                                |_|
-
-WhileLoop::WhileLoop(const ASTNode &node):
-	condition(Expression::create(*node.at(0))),
-	body(Statement::create(*node.at(1))) { absorbPosition(node); }
-
-std::pair<Result, Value *> WhileLoop::interpret(Context &context) {
-	body->validateInSingleStatementContext();
-
-	// Pushing/popping the scope stack isn't necessary because there's no need for it in a non-block statement
-	// (let/const is invalid in a single-statement context) and a block does it itself.
-
-	while (*condition->evaluate(context)) {
-		const auto [result, value] = body->interpret(context);
-		if (result == Result::Break)
-			return {Result::None, value};
-		if (result == Result::Return)
-			return {Result::Return, value};
+	std::vector<Reference *> values;
+	for (const auto &expression: expressions) {
+		assert(expression);
+		values.push_back(context.makeReference(expression->evaluate(context)));
 	}
-
-	return {Result::None, nullptr};
+	return context.makeValue<Array>(std::move(values));
 }
 
-void WhileLoop::findVariables(std::vector<VariableUsage> &usages) const {
-	assert(condition);
-	condition->findVariables(usages);
-}
-
-//   ______         _
-//  |  ____|       | |
-//  | |__ ___  _ __| |     ___   ___  _ __
-//  |  __/ _ \| '__| |    / _ \ / _ \| '_ \
-//  | | | (_) | |  | |___| (_) | (_) | |_) |
-//  |_|  \___/|_|  |______\___/ \___/| .__/
-//                                   | |
-//                                   |_|
-
-ForLoop::ForLoop(const ASTNode &node):
-	setup(Statement::create(*node.at(0))),
-	condition(Expression::create(*node.at(1))),
-	postaction(Expression::create(*node.at(2))),
-	body(Statement::create(*node.at(3))) { absorbPosition(node); }
-
-std::pair<Result, Value *> ForLoop::interpret(Context &context) {
-	body->validateInSingleStatementContext();
-
-	// Unlike in a while loop, pushing/popping the scope stack is necessary because any variable declarations inside
-	// the for loop's setup statement can't interfere with the outer scope.
-
-	context.stack.push();
-	setup->interpret(context);
-
-	while (*condition->evaluate(context)) {
-		const auto [result, value] = body->interpret(context);
-
-		if (result == Result::Break)
-			return {Result::None, value};
-
-		if (result == Result::Return)
-			return {Result::Return, value};
-
-		postaction->interpret(context);
-	}
-
-	context.stack.pop();
-
-	return {Result::None, nullptr};
-}
-
-void ForLoop::findVariables(std::vector<VariableUsage> &usages) const {
-	assert(condition);
-	condition->findVariables(usages);
-}
-
-//    _____            _   _
-//   / ____|          | | (_)
-//  | |     ___  _ __ | |_ _ _ __  _   _  ___
-//  | |    / _ \| '_ \| __| | '_ \| | | |/ _ \
-//  | |___| (_) | | | | |_| | | | | |_| |  __/
-//   \_____\___/|_| |_|\__|_|_| |_|\__,_|\___|
-
-std::pair<Result, Value *> Continue::interpret(Context &) {
-	return {Result::Continue, nullptr};
-}
-
-//   ____                 _
-//  |  _ \               | |
-//  | |_) |_ __ ___  __ _| | __
-//  |  _ <| '__/ _ \/ _` | |/ /
-//  | |_) | | |  __/ (_| |   <
-//  |____/|_|  \___|\__,_|_|\_\.
-
-
-std::pair<Result, Value *> Break::interpret(Context &) {
-	return {Result::Break, nullptr};
-}
-
-//   _____      _
-//  |  __ \    | |
-//  | |__) |___| |_ _   _ _ __ _ __
-//  |  _  // _ \ __| | | | '__| '_ \
-//  | | \ \  __/ |_| |_| | |  | | | |
-//  |_|  \_\___|\__|\__,_|_|  |_| |_|
-
-Return::Return(const ASTNode &node):
-	returnValue(node.empty()? nullptr : Expression::create(*node.front())) { absorbPosition(node); }
-
-std::pair<Result, Value *> Return::interpret(Context &context) {
-	if (returnValue)
-		return {Result::Return, returnValue->evaluate(context)};
-	return {Result::Return, context.makeValue<Undefined>()};
-}
-
-void Return::findVariables(std::vector<VariableUsage> &usages) const {
-	if (returnValue)
-		returnValue->findVariables(usages);
+void ArrayExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	for (const auto &expression: expressions)
+		if (expression)
+			expression->findVariables(usages);
 }
 
 //   ____  _                        ______                              _
@@ -537,81 +362,111 @@ void BinaryExpression::findVariables(std::vector<VariableUsage> &usages) const {
 	right->findVariables(usages);
 }
 
-//   _    _                        ______                              _
-//  | |  | |                      |  ____|                            (_)
-//  | |  | |_ __   __ _ _ __ _   _| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
-//  | |  | | '_ \ / _` | '__| | | |  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
-//  | |__| | | | | (_| | |  | |_| | |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
-//   \____/|_| |_|\__,_|_|   \__, |______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
-//                            __/ |           | |
-//                           |___/            |_|
+//   ____  _            _
+//  |  _ \| |          | |
+//  | |_) | | ___   ___| | __
+//  |  _ <| |/ _ \ / __| |/ /
+//  | |_) | | (_) | (__|   <
+//  |____/|_|\___/ \___|_|\_\.
 
-UnaryExpression::UnaryExpression(const ASTNode &node):
-	type(getType(node.symbol)),
-	subexpr(Expression::create(*node.front())) { absorbPosition(node); }
+Block::Block(const ASTNode &node) {
+	absorbPosition(node);
 
-Value * UnaryExpression::evaluate(Context &context) {
-	switch (type) {
-		case Type::Plus:
-			return subexpr->evaluate(context)->toNumber();
-
-		case Type::LogicalNot:
-			return context.makeValue<Boolean>(!*subexpr->evaluate(context));
-
-		case Type::Negation: {
-			auto *number = subexpr->evaluate(context)->toNumber();
-			number->number = -number->number;
-			return number;
-		}
-
-		case Type::PrefixIncrement:
-		case Type::PrefixDecrement:
-		case Type::PostfixIncrement:
-		case Type::PostfixDecrement: {
-			auto *lvalue = dynamic_cast<LValueExpression *>(subexpr.get());
-			assert(lvalue != nullptr);
-			auto *subvalue = lvalue->evaluate(context);
-			assert(subvalue != nullptr);
-			assert(subvalue->getType() == ValueType::Reference);
-			if (subvalue->ultimateType() != ValueType::Number)
-				return context.makeValue<Number>(nan(""));
-			auto *number = dynamic_cast<Number *>(subvalue->ultimateValue());
-			double new_value = nan("");
-			switch (type) {
-				case Type::PrefixIncrement:  new_value = ++number->number; break;
-				case Type::PrefixDecrement:  new_value = --number->number; break;
-				case Type::PostfixIncrement: new_value = number->number++; break;
-				case Type::PostfixDecrement: new_value = number->number--; break;
-				default: std::terminate();
-			}
-			auto *out = context.makeValue<Number>(new_value);
-			dynamic_cast<Reference *>(subvalue)->referent = number;
-			return out;
-		}
-
-		default:
-			throw Unimplemented("Can't evaluate UnaryExpression with type " + std::to_string(static_cast<int>(type)) +
-				": unimplemented");
-	}
+	for (const auto *subnode: node)
+		body.emplace_back(Statement::create(*subnode));
 }
 
-UnaryExpression::Type UnaryExpression::getType(int symbol) {
-	switch (symbol) {
-		case JSTOK_PLUS:       return Type::Plus;
-		case JSTOK_MINUS:      return Type::Negation;
-		case JSTOK_PLUSPLUS:   return Type::PrefixIncrement;
-		case JSTOK_MINUSMINUS: return Type::PrefixDecrement;
-		case JS_POSTPLUS:      return Type::PostfixIncrement;
-		case JS_POSTMINUS:     return Type::PostfixDecrement;
-		case JSTOK_NOT:        return Type::LogicalNot;
-		default:
-			throw std::invalid_argument("Unknown symbol in UnaryExpression::getType: " +
-				std::string(jsParser.getName(symbol)));
+std::pair<Result, Value *> Block::interpret(Context &context) {
+	context.stack.push();
+
+	for (auto &node: body) {
+		const auto [result, value] = node->interpret(context);
+		if (result != Result::None) {
+			context.stack.pop();
+			return {result, value};
+		}
 	}
+
+	context.stack.pop();
+	return {Result::None, nullptr};
 }
 
-void UnaryExpression::findVariables(std::vector<VariableUsage> &usages) const {
-	subexpr->findVariables(usages);
+void Block::findVariables(std::vector<VariableUsage> &usages) const {
+	for (const auto &node: body)
+		node->findVariables(usages);
+}
+
+//   ____              _                  _      _ _                 _
+//  |  _ \            | |                | |    (_) |               | |
+//  | |_) | ___   ___ | | ___  __ _ _ __ | |     _| |_ ___ _ __ __ _| |
+//  |  _ < / _ \ / _ \| |/ _ \/ _` | '_ \| |    | | __/ _ \ '__/ _` | |
+//  | |_) | (_) | (_) | |  __/ (_| | | | | |____| | ||  __/ | | (_| | |
+//  |____/ \___/ \___/|_|\___|\__,_|_| |_|______|_|\__\___|_|  \__,_|_|
+
+BooleanLiteral::BooleanLiteral(const ASTNode &node): value(node.symbol == JSTOK_TRUE) {
+	absorbPosition(node);
+}
+
+Value * BooleanLiteral::evaluate(Context &context) {
+	return context.makeValue<Boolean>(value);
+}
+
+//   ____                 _
+//  |  _ \               | |
+//  | |_) |_ __ ___  __ _| | __
+//  |  _ <| '__/ _ \/ _` | |/ /
+//  | |_) | | |  __/ (_| |   <
+//  |____/|_|  \___|\__,_|_|\_\.
+
+
+std::pair<Result, Value *> Break::interpret(Context &) {
+	return {Result::Break, nullptr};
+}
+
+//    _____            _   _
+//   / ____|          | | (_)
+//  | |     ___  _ __ | |_ _ _ __  _   _  ___
+//  | |    / _ \| '_ \| __| | '_ \| | | |/ _ \
+//  | |___| (_) | | | | |_| | | | | |_| |  __/
+//   \_____\___/|_| |_|\__|_|_| |_|\__,_|\___|
+
+std::pair<Result, Value *> Continue::interpret(Context &) {
+	return {Result::Continue, nullptr};
+}
+
+//   _____        _   ______                              _
+//  |  __ \      | | |  ____|                            (_)
+//  | |  | | ___ | |_| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//  | |  | |/ _ \| __|  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//  | |__| | (_) | |_| |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//  |_____/ \___/ \__|______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//                               | |
+//                               |_|
+
+DotExpression::DotExpression(const ASTNode &node):
+	base(Expression::create(*node.at(0))),
+	ident(*node.at(1)->text) { absorbPosition(node); }
+
+Value * DotExpression::evaluate(Context &context) {
+	Value *lhs = nullptr;
+
+	{
+		auto saver = context.writeMember(false);
+		lhs = base->evaluate(context);
+	}
+
+	// TODO: update when boxing support is added
+	if (lhs->ultimateType() != ValueType::Object) {
+		WARN("LHS type: " << lhs->getName());
+		throw TypeError("Can't use . operator on non-object " + lhs->getName(), location);
+	}
+
+	return access(context, lhs->ultimateValue(), ident);
+}
+
+void DotExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	assert(base != nullptr);
+	base->findVariables(usages);
 }
 
 //   ______                              _
@@ -719,154 +574,50 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 	return out;
 }
 
-//    _____ _        _                            _
-//   / ____| |      | |                          | |
-//  | (___ | |_ __ _| |_ ___ _ __ ___   ___ _ __ | |_
-//   \___ \| __/ _` | __/ _ \ '_ ` _ \ / _ \ '_ \| __|
-//   ____) | || (_| | ||  __/ | | | | |  __/ | | | |_
-//  |_____/ \__\__,_|\__\___|_| |_| |_|\___|_| |_|\__|
+//   ______         _
+//  |  ____|       | |
+//  | |__ ___  _ __| |     ___   ___  _ __
+//  |  __/ _ \| '__| |    / _ \ / _ \| '_ \
+//  | | | (_) | |  | |___| (_) | (_) | |_) |
+//  |_|  \___/|_|  |______\___/ \___/| .__/
+//                                   | |
+//                                   |_|
 
-std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
-	std::unique_ptr<Statement> out;
+ForLoop::ForLoop(const ASTNode &node):
+	setup(Statement::create(*node.at(0))),
+	condition(Expression::create(*node.at(1))),
+	postaction(Expression::create(*node.at(2))),
+	body(Statement::create(*node.at(3))) { absorbPosition(node); }
 
-	switch (node.symbol) {
-		case JSTOK_LET:
-		case JSTOK_CONST:
-		case JSTOK_VAR:
-			out = std::make_unique<VariableDefinitions>(node);
-			break;
-		case JSTOK_IF:
-			out = std::make_unique<IfStatement>(node);
-			break;
-		case JSTOK_WHILE:
-			out = std::make_unique<WhileLoop>(node);
-			break;
-		case JSTOK_FOR:
-			out = std::make_unique<ForLoop>(node);
-			break;
-		case JSTOK_CONTINUE:
-			out = std::make_unique<Continue>();
-			break;
-		case JSTOK_BREAK:
-			out = std::make_unique<Break>();
-			break;
-		case JSTOK_RETURN:
-			out = std::make_unique<Return>(node);
-			break;
-		case JS_BLOCK:
-			out = std::make_unique<Block>(node);
-			break;
-		case JSTOK_LPAREN:
-		case JSTOK_FUNCTION:
-		case JSTOK_ASSIGN:
-			out = Expression::create(node);
-			break;
-		default:
-			node.debug();
-			throw std::invalid_argument("Unhandled symbol in Statement::create: " + std::string(node.getName()));
+std::pair<Result, Value *> ForLoop::interpret(Context &context) {
+	body->validateInSingleStatementContext();
+
+	// Unlike in a while loop, pushing/popping the scope stack is necessary because any variable declarations inside
+	// the for loop's setup statement can't interfere with the outer scope.
+
+	context.stack.push();
+	setup->interpret(context);
+
+	while (*condition->evaluate(context)) {
+		const auto [result, value] = body->interpret(context);
+
+		if (result == Result::Break)
+			return {Result::None, value};
+
+		if (result == Result::Return)
+			return {Result::Return, value};
+
+		postaction->interpret(context);
 	}
 
-	out->absorbPosition(node);
-	return out;
+	context.stack.pop();
+
+	return {Result::None, nullptr};
 }
 
-//   _____    _            _   _  __ _
-//  |_   _|  | |          | | (_)/ _(_)
-//    | |  __| | ___ _ __ | |_ _| |_ _  ___ _ __
-//    | | / _` |/ _ \ '_ \| __| |  _| |/ _ \ '__|
-//   _| || (_| |  __/ | | | |_| | | | |  __/ |
-//  |_____\__,_|\___|_| |_|\__|_|_| |_|\___|_|
-
-Identifier::Identifier(const ASTNode &node): name(*node.text) {
-	absorbPosition(node);
-}
-
-Value * Identifier::evaluate(Context &context) {
-	if (Reference *result = context.stack.lookup(name))
-		return result;
-
-	throw ReferenceError(name, location);
-}
-
-void Identifier::findVariables(std::vector<VariableUsage> &usages) const {
-	usages.emplace_back(false, name);
-}
-
-//   _   _                 _               _      _ _                 _
-//  | \ | |               | |             | |    (_) |               | |
-//  |  \| |_   _ _ __ ___ | |__   ___ _ __| |     _| |_ ___ _ __ __ _| |
-//  | . ` | | | | '_ ` _ \| '_ \ / _ \ '__| |    | | __/ _ \ '__/ _` | |
-//  | |\  | |_| | | | | | | |_) |  __/ |  | |____| | ||  __/ | | (_| | |
-//  |_| \_|\__,_|_| |_| |_|_.__/ \___|_|  |______|_|\__\___|_|  \__,_|_|
-
-NumberLiteral::NumberLiteral(const ASTNode &node): value(parseDouble(*node.text)) {
-	absorbPosition(node);
-}
-
-Value * NumberLiteral::evaluate(Context &context) {
-	return context.makeValue<Number>(value);
-}
-
-//    _____ _        _             _      _ _                 _
-//   / ____| |      (_)           | |    (_) |               | |
-//  | (___ | |_ _ __ _ _ __   __ _| |     _| |_ ___ _ __ __ _| |
-//   \___ \| __| '__| | '_ \ / _` | |    | | __/ _ \ '__/ _` | |
-//   ____) | |_| |  | | | | | (_| | |____| | ||  __/ | | (_| | |
-//  |_____/ \__|_|  |_|_| |_|\__, |______|_|\__\___|_|  \__,_|_|
-//                            __/ |
-//                           |___/
-
-StringLiteral::StringLiteral(const ASTNode &node): value(node.unquote()) {
-	absorbPosition(node);
-}
-
-Value * StringLiteral::evaluate(Context &context) {
-	return context.makeValue<String>(value);
-}
-
-//   _    _           _       __ _                _ _      _ _                 _
-//  | |  | |         | |     / _(_)              | | |    (_) |               | |
-//  | |  | |_ __   __| | ___| |_ _ _ __   ___  __| | |     _| |_ ___ _ __ __ _| |
-//  | |  | | '_ \ / _` |/ _ \  _| | '_ \ / _ \/ _` | |    | | __/ _ \ '__/ _` | |
-//  | |__| | | | | (_| |  __/ | | | | | |  __/ (_| | |____| | ||  __/ | | (_| | |
-//   \____/|_| |_|\__,_|\___|_| |_|_| |_|\___|\__,_|______|_|\__\___|_|  \__,_|_|
-
-UndefinedLiteral::UndefinedLiteral(const ASTNode &node) {
-	absorbPosition(node);
-}
-
-Value * UndefinedLiteral::evaluate(Context &context) {
-	return context.makeValue<Undefined>();
-}
-
-//   _   _       _ _ _      _ _                 _
-//  | \ | |     | | | |    (_) |               | |
-//  |  \| |_   _| | | |     _| |_ ___ _ __ __ _| |
-//  | . ` | | | | | | |    | | __/ _ \ '__/ _` | |
-//  | |\  | |_| | | | |____| | ||  __/ | | (_| | |
-//  |_| \_|\__,_|_|_|______|_|\__\___|_|  \__,_|_|
-
-NullLiteral::NullLiteral(const ASTNode &node) {
-	absorbPosition(node);
-}
-
-Value * NullLiteral::evaluate(Context &context) {
-	return context.makeValue<Null>();
-}
-
-//   ____              _                  _      _ _                 _
-//  |  _ \            | |                | |    (_) |               | |
-//  | |_) | ___   ___ | | ___  __ _ _ __ | |     _| |_ ___ _ __ __ _| |
-//  |  _ < / _ \ / _ \| |/ _ \/ _` | '_ \| |    | | __/ _ \ '__/ _` | |
-//  | |_) | (_) | (_) | |  __/ (_| | | | | |____| | ||  __/ | | (_| | |
-//  |____/ \___/ \___/|_|\___|\__,_|_| |_|______|_|\__\___|_|  \__,_|_|
-
-BooleanLiteral::BooleanLiteral(const ASTNode &node): value(node.symbol == JSTOK_TRUE) {
-	absorbPosition(node);
-}
-
-Value * BooleanLiteral::evaluate(Context &context) {
-	return context.makeValue<Boolean>(value);
+void ForLoop::findVariables(std::vector<VariableUsage> &usages) const {
+	assert(condition);
+	condition->findVariables(usages);
 }
 
 //   ______                _   _              _____      _ _
@@ -1008,81 +759,102 @@ Closure FunctionExpression::assembleClosure(Context &context) const {
 	return {std::move(closure), std::move(closureMap)};
 }
 
-//    ____  _     _           _   ______                              _
-//   / __ \| |   (_)         | | |  ____|                            (_)
-//  | |  | | |__  _  ___  ___| |_| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
-//  | |  | | '_ \| |/ _ \/ __| __|  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
-//  | |__| | |_) | |  __/ (__| |_| |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
-//   \____/|_.__/| |\___|\___|\__|______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
-//              _/ |                         | |
-//             |__/                          |_|
+//   _____    _            _   _  __ _
+//  |_   _|  | |          | | (_)/ _(_)
+//    | |  __| | ___ _ __ | |_ _| |_ _  ___ _ __
+//    | | / _` |/ _ \ '_ \| __| |  _| |/ _ \ '__|
+//   _| || (_| |  __/ | | | |_| | | | |  __/ |
+//  |_____\__,_|\___|_| |_|\__|_|_| |_|\___|_|
 
-ObjectExpression::ObjectExpression(const ASTNode &node) {
-	if (!node.empty())
-		for (const auto &subnode: *node.front())
-			map[*subnode->text] = Expression::create(*subnode->front());
+Identifier::Identifier(const ASTNode &node): name(*node.text) {
+	absorbPosition(node);
 }
 
-Value * ObjectExpression::evaluate(Context &context) {
-	auto *out = context.makeValue<Object>();
-	FieldSaver saver(context, &Context::nextThis);
-	context.nextThis = context.makeReference(out);
-	for (const auto &[key, expression]: map)
-		out->map[key] = context.makeReference(expression->evaluate(context));
-	return out;
+Value * Identifier::evaluate(Context &context) {
+	if (Reference *result = context.stack.lookup(name))
+		return result;
+
+	throw ReferenceError(name, location);
 }
 
-void ObjectExpression::findVariables(std::vector<VariableUsage> &usages) const {
-	for (const auto &[key, expression]: map)
-		expression->findVariables(usages);
+void Identifier::findVariables(std::vector<VariableUsage> &usages) const {
+	usages.emplace_back(false, name);
 }
 
-//                                 ______                              _
-//      /\                        |  ____|                            (_)
-//     /  \   _ __ _ __ __ _ _   _| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
-//    / /\ \ | '__| '__/ _` | | | |  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
-//   / ____ \| |  | | | (_| | |_| | |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
-//  /_/    \_\_|  |_|  \__,_|\__, |______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
-//                            __/ |           | |
-//                           |___/            |_|
+//   _____  __ _____ _        _                            _
+//  |_   _|/ _/ ____| |      | |                          | |
+//    | | | || (___ | |_ __ _| |_ ___ _ __ ___   ___ _ __ | |_
+//    | | |  _\___ \| __/ _` | __/ _ \ '_ ` _ \ / _ \ '_ \| __|
+//   _| |_| | ____) | || (_| | ||  __/ | | | | |  __/ | | | |_
+//  |_____|_||_____/ \__\__,_|\__\___|_| |_| |_|\___|_| |_|\__|
 
-ArrayExpression::ArrayExpression(const ASTNode &node) {
-	if (!node.empty()) {
-		for (const auto &subnode: *node.front()) {
-			if (subnode->symbol == JS_EMPTY) {
-				isHoley = true;
-				expressions.emplace_back(nullptr);
-			} else {
-				expressions.push_back(Expression::create(*subnode));
-			}
-		}
-	}
+IfStatement::IfStatement(const ASTNode &node):
+	condition(Expression::create(*node.at(0))),
+	consequent(Statement::create(*node.at(1))),
+	alternate(2 < node.size()? Statement::create(*node.at(2)) : nullptr) { absorbPosition(node); }
+
+std::pair<Result, Value *> IfStatement::interpret(Context &context) {
+	if (*condition->evaluate(context))
+		return consequent->interpret(context);
+	if (alternate)
+		return alternate->interpret(context);
+	return {Result::None, nullptr};
 }
 
-Value * ArrayExpression::evaluate(Context &context) {
-	if (isHoley) {
-		std::map<size_t, Reference *> map;
-		size_t i = 0;
-		for (const auto &expression: expressions) {
-			if (expression)
-				map[i] = context.makeReference(expression->evaluate(context));
-			++i;
-		}
-		return context.makeValue<Array>(std::move(map), i);
-	}
-
-	std::vector<Reference *> values;
-	for (const auto &expression: expressions) {
-		assert(expression);
-		values.push_back(context.makeReference(expression->evaluate(context)));
-	}
-	return context.makeValue<Array>(std::move(values));
+void IfStatement::findVariables(std::vector<VariableUsage> &usages) const {
+	assert(condition);
+	condition->findVariables(usages);
 }
 
-void ArrayExpression::findVariables(std::vector<VariableUsage> &usages) const {
-	for (const auto &expression: expressions)
-		if (expression)
-			expression->findVariables(usages);
+//   _   _           _
+//  | \ | |         | |
+//  |  \| | ___   __| | ___
+//  | . ` |/ _ \ / _` |/ _ \
+//  | |\  | (_) | (_| |  __/
+//  |_| \_|\___/ \__,_|\___|
+
+void Node::assertType(NodeType type) {
+	if (getType() != type)
+		throw std::runtime_error("Assertion failed: " + std::string(typeid(*this).name()) + " at [" +
+			static_cast<std::string>(location) + "] is not an instance of " + stringify(type));
+}
+
+std::unique_ptr<Node> Node::fromAST(const ASTNode &node) {
+	throw std::invalid_argument("Node::fromAST failed: symbol \"" + std::string(node.getName()) + "\" not handled");
+}
+
+void Node::absorbPosition(const ASTNode &node) {
+	location = node.location;
+}
+
+//   _   _       _ _ _      _ _                 _
+//  | \ | |     | | | |    (_) |               | |
+//  |  \| |_   _| | | |     _| |_ ___ _ __ __ _| |
+//  | . ` | | | | | | |    | | __/ _ \ '__/ _` | |
+//  | |\  | |_| | | | |____| | ||  __/ | | (_| | |
+//  |_| \_|\__,_|_|_|______|_|\__\___|_|  \__,_|_|
+
+NullLiteral::NullLiteral(const ASTNode &node) {
+	absorbPosition(node);
+}
+
+Value * NullLiteral::evaluate(Context &context) {
+	return context.makeValue<Null>();
+}
+
+//   _   _                 _               _      _ _                 _
+//  | \ | |               | |             | |    (_) |               | |
+//  |  \| |_   _ _ __ ___ | |__   ___ _ __| |     _| |_ ___ _ __ __ _| |
+//  | . ` | | | | '_ ` _ \| '_ \ / _ \ '__| |    | | __/ _ \ '__/ _` | |
+//  | |\  | |_| | | | | | | |_) |  __/ |  | |____| | ||  __/ | | (_| | |
+//  |_| \_|\__,_|_| |_| |_|_.__/ \___|_|  |______|_|\__\___|_|  \__,_|_|
+
+NumberLiteral::NumberLiteral(const ASTNode &node): value(parseDouble(*node.text)) {
+	absorbPosition(node);
+}
+
+Value * NumberLiteral::evaluate(Context &context) {
+	return context.makeValue<Number>(value);
 }
 
 //    ____  _     _           _
@@ -1113,119 +885,346 @@ Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &
 	return undefined;
 }
 
-//   _____        _   ______                              _
-//  |  __ \      | | |  ____|                            (_)
-//  | |  | | ___ | |_| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
-//  | |  | |/ _ \| __|  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
-//  | |__| | (_) | |_| |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
-//  |_____/ \___/ \__|______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
-//                               | |
-//                               |_|
+//    ____  _     _           _   ______                              _
+//   / __ \| |   (_)         | | |  ____|                            (_)
+//  | |  | | |__  _  ___  ___| |_| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//  | |  | | '_ \| |/ _ \/ __| __|  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//  | |__| | |_) | |  __/ (__| |_| |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//   \____/|_.__/| |\___|\___|\__|______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//              _/ |                         | |
+//             |__/                          |_|
 
-DotExpression::DotExpression(const ASTNode &node):
-	base(Expression::create(*node.at(0))),
-	ident(*node.at(1)->text) { absorbPosition(node); }
-
-Value * DotExpression::evaluate(Context &context) {
-	Value *lhs = nullptr;
-
-	{
-		auto saver = context.writeMember(false);
-		lhs = base->evaluate(context);
-	}
-
-	// TODO: update when boxing support is added
-	if (lhs->ultimateType() != ValueType::Object) {
-		WARN("LHS type: " << lhs->getName());
-		throw TypeError("Can't use . operator on non-object " + lhs->getName(), location);
-	}
-
-	return access(context, lhs->ultimateValue(), ident);
+ObjectExpression::ObjectExpression(const ASTNode &node) {
+	if (!node.empty())
+		for (const auto &subnode: *node.front())
+			map[*subnode->text] = Expression::create(*subnode->front());
 }
 
-void DotExpression::findVariables(std::vector<VariableUsage> &usages) const {
-	assert(base != nullptr);
-	base->findVariables(usages);
+Value * ObjectExpression::evaluate(Context &context) {
+	auto *out = context.makeValue<Object>();
+	FieldSaver saver(context, &Context::nextThis);
+	context.nextThis = context.makeReference(out);
+	for (const auto &[key, expression]: map)
+		out->map[key] = context.makeReference(expression->evaluate(context));
+	return out;
 }
 
+void ObjectExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	for (const auto &[key, expression]: map)
+		expression->findVariables(usages);
+}
 
-//                                 ______                              _
-//      /\                        |  ____|                            (_)
-//     /  \   ___ ___ ___  ___ ___| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
-//    / /\ \ / __/ __/ _ \/ __/ __|  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
-//   / ____ \ (_| (_|  __/\__ \__ \ |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
-//  /_/    \_\___\___\___||___/___/______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
-//                                            | |
-//                                            |_|
+//   _____
+//  |  __ \
+//  | |__) | __ ___   __ _ _ __ __ _ _ __ ___
+//  |  ___/ '__/ _ \ / _` | '__/ _` | '_ ` _ \
+//  | |   | | | (_) | (_| | | | (_| | | | | | |
+//  |_|   |_|  \___/ \__, |_|  \__,_|_| |_| |_|
+//                    __/ |
+//                   |___/
 
-AccessExpression::AccessExpression(const ASTNode &node):
-	base(Expression::create(*node.at(0))),
-	subscript(Expression::create(*node.at(1))) { absorbPosition(node); }
+Program::Program(const ASTNode &node) {
+	absorbPosition(node);
 
-Value * AccessExpression::evaluate(Context &context) {
-	Value *lhs = nullptr;
-	Value *rhs = nullptr;
+	for (const auto *subnode: node)
+		body.emplace_back(Statement::create(*subnode));
+}
 
-	{
-		auto saver = context.writeMember(false);
-		lhs = base->evaluate(context);
-		assert(lhs != nullptr);
+std::pair<Result, Value *> Program::interpret(Context &context) {
+	context.stack.push();
+
+	for (auto &node: body) {
+		const auto [result, value] = node->interpret(context);
+
+		if (result == Result::Return)
+			return std::make_pair(result, value);
+
+		if (result == Result::Break)
+			throw JSError("Invalid break statement", node->location);
+
+		if (result == Result::Continue)
+			throw JSError("Invalid continue statement", node->location);
 	}
 
-	if (!lhs->subscriptable())
-		throw TypeError("Can't use [] operator on non-object/array/string (" + lhs->getName() + ')', location);
+	context.stack.pop();
+	return {Result::None, nullptr};
+}
 
-	{
-		auto saver = context.writeMember(false);
-		rhs = subscript->evaluate(context);
-		assert(rhs != nullptr);
+//   _____      _
+//  |  __ \    | |
+//  | |__) |___| |_ _   _ _ __ _ __
+//  |  _  // _ \ __| | | | '__| '_ \
+//  | | \ \  __/ |_| |_| | |  | | | |
+//  |_|  \_\___|\__|\__,_|_|  |_| |_|
+
+Return::Return(const ASTNode &node):
+	returnValue(node.empty()? nullptr : Expression::create(*node.front())) { absorbPosition(node); }
+
+std::pair<Result, Value *> Return::interpret(Context &context) {
+	if (returnValue)
+		return {Result::Return, returnValue->evaluate(context)};
+	return {Result::Return, context.makeValue<Undefined>()};
+}
+
+void Return::findVariables(std::vector<VariableUsage> &usages) const {
+	if (returnValue)
+		returnValue->findVariables(usages);
+}
+
+//    _____ _        _                            _
+//   / ____| |      | |                          | |
+//  | (___ | |_ __ _| |_ ___ _ __ ___   ___ _ __ | |_
+//   \___ \| __/ _` | __/ _ \ '_ ` _ \ / _ \ '_ \| __|
+//   ____) | || (_| | ||  __/ | | | | |  __/ | | | |_
+//  |_____/ \__\__,_|\__\___|_| |_| |_|\___|_| |_|\__|
+
+std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
+	std::unique_ptr<Statement> out;
+
+	switch (node.symbol) {
+		case JSTOK_LET:
+		case JSTOK_CONST:
+		case JSTOK_VAR:
+			out = std::make_unique<VariableDefinitions>(node);
+			break;
+		case JSTOK_IF:
+			out = std::make_unique<IfStatement>(node);
+			break;
+		case JSTOK_WHILE:
+			out = std::make_unique<WhileLoop>(node);
+			break;
+		case JSTOK_FOR:
+			out = std::make_unique<ForLoop>(node);
+			break;
+		case JSTOK_CONTINUE:
+			out = std::make_unique<Continue>();
+			break;
+		case JSTOK_BREAK:
+			out = std::make_unique<Break>();
+			break;
+		case JSTOK_RETURN:
+			out = std::make_unique<Return>(node);
+			break;
+		case JS_BLOCK:
+			out = std::make_unique<Block>(node);
+			break;
+		case JSTOK_LPAREN:
+		case JSTOK_FUNCTION:
+		case JSTOK_ASSIGN:
+			out = Expression::create(node);
+			break;
+		default:
+			node.debug();
+			throw std::invalid_argument("Unhandled symbol in Statement::create: " + std::string(node.getName()));
 	}
 
-	switch (lhs->ultimateType()) {
-		case ValueType::Object:
-			return access(context, lhs->ultimateValue(), static_cast<std::string>(*rhs));
+	out->absorbPosition(node);
+	return out;
+}
 
-		case ValueType::Array: {
-			auto *reference = dynamic_cast<Reference *>(lhs);
-			auto &array = dynamic_cast<Array &>(*lhs->ultimateValue());
+//    _____ _        _             _      _ _                 _
+//   / ____| |      (_)           | |    (_) |               | |
+//  | (___ | |_ _ __ _ _ __   __ _| |     _| |_ ___ _ __ __ _| |
+//   \___ \| __| '__| | '_ \ / _` | |    | | __/ _ \ '__/ _` | |
+//   ____) | |_| |  | | | | | (_| | |____| | ||  __/ | | (_| | |
+//  |_____/ \__|_|  |_|_| |_|\__, |______|_|\__\___|_|  \__,_|_|
+//                            __/ |
+//                           |___/
 
-			if (reference == nullptr)
-				return context.makeValue<Undefined>();
+StringLiteral::StringLiteral(const ASTNode &node): value(node.unquote()) {
+	absorbPosition(node);
+}
 
-			bool is_int = false;
-			size_t index = -1;
+Value * StringLiteral::evaluate(Context &context) {
+	return context.makeValue<String>(value);
+}
 
-			if (rhs->ultimateType() == ValueType::Number) {
-				double number = static_cast<double>(*rhs->ultimateValue());
-				double intpart = 0.;
-				if (modf(number, &intpart) == 0) {
-					is_int = true;
-					index = static_cast<size_t>(intpart);
-				}
+//   _    _                        ______                              _
+//  | |  | |                      |  ____|                            (_)
+//  | |  | |_ __   __ _ _ __ _   _| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//  | |  | | '_ \ / _` | '__| | | |  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//  | |__| | | | | (_| | |  | |_| | |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//   \____/|_| |_|\__,_|_|   \__, |______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//                            __/ |           | |
+//                           |___/            |_|
+
+UnaryExpression::UnaryExpression(const ASTNode &node):
+	type(getType(node.symbol)),
+	subexpr(Expression::create(*node.front())) { absorbPosition(node); }
+
+Value * UnaryExpression::evaluate(Context &context) {
+	switch (type) {
+		case Type::Plus:
+			return subexpr->evaluate(context)->toNumber();
+
+		case Type::LogicalNot:
+			return context.makeValue<Boolean>(!*subexpr->evaluate(context));
+
+		case Type::Negation: {
+			auto *number = subexpr->evaluate(context)->toNumber();
+			number->number = -number->number;
+			return number;
+		}
+
+		case Type::PrefixIncrement:
+		case Type::PrefixDecrement:
+		case Type::PostfixIncrement:
+		case Type::PostfixDecrement: {
+			auto *lvalue = dynamic_cast<LValueExpression *>(subexpr.get());
+			assert(lvalue != nullptr);
+			auto *subvalue = lvalue->evaluate(context);
+			assert(subvalue != nullptr);
+			assert(subvalue->getType() == ValueType::Reference);
+			if (subvalue->ultimateType() != ValueType::Number)
+				return context.makeValue<Number>(nan(""));
+			auto *number = dynamic_cast<Number *>(subvalue->ultimateValue());
+			double new_value = nan("");
+			switch (type) {
+				case Type::PrefixIncrement:  new_value = ++number->number; break;
+				case Type::PrefixDecrement:  new_value = --number->number; break;
+				case Type::PostfixIncrement: new_value = number->number++; break;
+				case Type::PostfixDecrement: new_value = number->number--; break;
+				default: std::terminate();
 			}
-
-			if (!is_int) {
-				const auto stringified = static_cast<std::string>(*rhs);
-				reference->referent = context.makeValue<Object>(array);
-			} else if (context.writingMember) {
-				return array.fetchOrMake(index);
-			} else {
-				if (auto *fetched = array[index])
-					return fetched;
-				return context.makeReference<Undefined>();
-			}
-
-			return reference;
+			auto *out = context.makeValue<Number>(new_value);
+			dynamic_cast<Reference *>(subvalue)->referent = number;
+			return out;
 		}
 
 		default:
-			throw TypeError("Can't use [] operator on unsupported value (" + rhs->getName() + ')', location);
+			throw Unimplemented("Can't evaluate UnaryExpression with type " + std::to_string(static_cast<int>(type)) +
+				": unimplemented");
 	}
 }
 
-void AccessExpression::findVariables(std::vector<VariableUsage> &usages) const {
-	assert(base != nullptr);
-	assert(subscript != nullptr);
-	base->findVariables(usages);
-	subscript->findVariables(usages);
+UnaryExpression::Type UnaryExpression::getType(int symbol) {
+	switch (symbol) {
+		case JSTOK_PLUS:       return Type::Plus;
+		case JSTOK_MINUS:      return Type::Negation;
+		case JSTOK_PLUSPLUS:   return Type::PrefixIncrement;
+		case JSTOK_MINUSMINUS: return Type::PrefixDecrement;
+		case JS_POSTPLUS:      return Type::PostfixIncrement;
+		case JS_POSTMINUS:     return Type::PostfixDecrement;
+		case JSTOK_NOT:        return Type::LogicalNot;
+		default:
+			throw std::invalid_argument("Unknown symbol in UnaryExpression::getType: " +
+				std::string(jsParser.getName(symbol)));
+	}
+}
+
+void UnaryExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	subexpr->findVariables(usages);
+}
+
+//   _    _           _       __ _                _ _      _ _                 _
+//  | |  | |         | |     / _(_)              | | |    (_) |               | |
+//  | |  | |_ __   __| | ___| |_ _ _ __   ___  __| | |     _| |_ ___ _ __ __ _| |
+//  | |  | | '_ \ / _` |/ _ \  _| | '_ \ / _ \/ _` | |    | | __/ _ \ '__/ _` | |
+//  | |__| | | | | (_| |  __/ | | | | | |  __/ (_| | |____| | ||  __/ | | (_| | |
+//   \____/|_| |_|\__,_|\___|_| |_|_| |_|\___|\__,_|______|_|\__\___|_|  \__,_|_|
+
+UndefinedLiteral::UndefinedLiteral(const ASTNode &node) {
+	absorbPosition(node);
+}
+
+Value * UndefinedLiteral::evaluate(Context &context) {
+	return context.makeValue<Undefined>();
+}
+
+//  __      __        _       _     _      _____        __ _       _ _   _
+//  \ \    / /       (_)     | |   | |    |  __ \      / _(_)     (_) | (_)
+//   \ \  / /_ _ _ __ _  __ _| |__ | | ___| |  | | ___| |_ _ _ __  _| |_ _  ___  _ __
+//    \ \/ / _` | '__| |/ _` | '_ \| |/ _ \ |  | |/ _ \  _| | '_ \| | __| |/ _ \| '_ \
+//     \  / (_| | |  | | (_| | |_) | |  __/ |__| |  __/ | | | | | | | |_| | (_) | | | |
+//      \/ \__,_|_|  |_|\__,_|_.__/|_|\___|_____/ \___|_| |_|_| |_|_|\__|_|\___/|_| |_|
+
+VariableDefinition::VariableDefinition(const ASTNode &node):
+	ident(*node.text),
+	value(node.empty()? nullptr : Expression::create(*node.front())) { absorbPosition(node); }
+
+std::pair<Result, Value *> VariableDefinition::interpret(Context &) {
+	throw Unimplemented();
+}
+
+void VariableDefinition::findVariables(std::vector<VariableUsage> &usages) const {
+	usages.emplace_back(true, ident);
+}
+
+//  __      __        _       _     _      _____        __ _       _ _   _
+//  \ \    / /       (_)     | |   | |    |  __ \      / _(_)     (_) | (_)
+//   \ \  / /_ _ _ __ _  __ _| |__ | | ___| |  | | ___| |_ _ _ __  _| |_ _  ___  _ __  ___
+//    \ \/ / _` | '__| |/ _` | '_ \| |/ _ \ |  | |/ _ \  _| | '_ \| | __| |/ _ \| '_ \/ __|
+//     \  / (_| | |  | | (_| | |_) | |  __/ |__| |  __/ | | | | | | | |_| | (_) | | | \__ \
+//      \/ \__,_|_|  |_|\__,_|_.__/|_|\___|_____/ \___|_| |_|_| |_|_|\__|_|\___/|_| |_|___/
+
+VariableDefinitions::VariableDefinitions(const ASTNode &node): kind(getKind(node.at(0)->symbol)) {
+	absorbPosition(node);
+
+	for (const auto *subnode: *node.front())
+		definitions.push_back(std::make_unique<VariableDefinition>(*subnode));
+}
+
+std::pair<Result, Value *> VariableDefinitions::interpret(Context &context) {
+	for (const auto &definition: definitions) {
+		const auto &name = definition->ident;
+		const bool must_be_unique = kind == DeclarationKind::Let || kind == DeclarationKind::Const;
+
+		if (must_be_unique && context.stack.inLastScope(name))
+			throw std::runtime_error("Name \"" + name + "\" already exists in deepest scope");
+
+		if (definition->value) {
+			Value *evaluated =definition->value->evaluate(context);
+			assert(evaluated != nullptr);
+			context.stack.insert(name, evaluated);
+		} else {
+			context.stack.insert(name, context.makeValue<Undefined>());
+		}
+	}
+
+	return {Result::None, nullptr};
+}
+
+void VariableDefinitions::findVariables(std::vector<VariableUsage> &usages) const {
+	for (const auto &definition: definitions)
+		definition->findVariables(usages);
+}
+
+void VariableDefinitions::validateInSingleStatementContext() const {
+	if (kind == DeclarationKind::Let || kind == DeclarationKind::Const)
+		throw SyntaxError("Lexical declaration cannot appear in a single-statement context");
+}
+
+//  __          ___     _ _      _
+//  \ \        / / |   (_) |    | |
+//   \ \  /\  / /| |__  _| | ___| |     ___   ___  _ __
+//    \ \/  \/ / | '_ \| | |/ _ \ |    / _ \ / _ \| '_ \
+//     \  /\  /  | | | | | |  __/ |___| (_) | (_) | |_) |
+//      \/  \/   |_| |_|_|_|\___|______\___/ \___/| .__/
+//                                                | |
+//                                                |_|
+
+WhileLoop::WhileLoop(const ASTNode &node):
+	condition(Expression::create(*node.at(0))),
+	body(Statement::create(*node.at(1))) { absorbPosition(node); }
+
+std::pair<Result, Value *> WhileLoop::interpret(Context &context) {
+	body->validateInSingleStatementContext();
+
+	// Pushing/popping the scope stack isn't necessary because there's no need for it in a non-block statement
+	// (let/const is invalid in a single-statement context) and a block does it itself.
+
+	while (*condition->evaluate(context)) {
+		const auto [result, value] = body->interpret(context);
+		if (result == Result::Break)
+			return {Result::None, value};
+		if (result == Result::Return)
+			return {Result::Return, value};
+	}
+
+	return {Result::None, nullptr};
+}
+
+void WhileLoop::findVariables(std::vector<VariableUsage> &usages) const {
+	assert(condition);
+	condition->findVariables(usages);
 }
