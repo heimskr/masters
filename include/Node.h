@@ -13,6 +13,7 @@
 #include "Errors.h"
 
 class Context;
+class Function;
 class Statement;
 class Value;
 
@@ -106,6 +107,10 @@ class Expression: public Statement {
 class LValueExpression: public Expression {
 	protected:
 		LValueExpression() = default;
+};
+
+struct FunctionCaller {
+	static Value * call(Function *, Context &, const std::vector<Value *> &arguments, Reference *this_obj);
 };
 
 class Identifier: public LValueExpression {

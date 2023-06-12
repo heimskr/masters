@@ -428,6 +428,11 @@ std::unordered_set<Value *> Reference::getReferents() const {
 	return out;
 }
 
+Reference * Reference::withContext(ReferenceContext new_context) const {
+	assertReferent();
+	return make<Reference>(referent, isConst, std::move(new_context));
+}
+
 Reference::operator std::string() const {
 	assertReferent();
 	return static_cast<std::string>(*referent);

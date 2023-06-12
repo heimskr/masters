@@ -456,10 +456,10 @@ Value * DotExpression::evaluate(Context &context) {
 	}
 
 	// TODO: update when boxing support is added
-	if (lhs->ultimateType() != ValueType::Object) {
-		WARN("LHS type: " << lhs->getName());
-		throw TypeError("Can't use . operator on non-object " + lhs->getName(), location);
-	}
+	// if (lhs->ultimateType() != ValueType::Object) {
+	// 	WARN("LHS type: " << lhs->getName());
+	// 	throw TypeError("Can't use . operator on non-object " + lhs->getName(), location);
+	// }
 
 	return access(context, lhs->ultimateValue(), ident);
 }
@@ -642,8 +642,8 @@ Value * FunctionCall::evaluate(Context &context) {
 		throw TypeError("Value " + static_cast<std::string>(*evaluated_function) + " is not a function");
 
 	auto &cast_function = dynamic_cast<Function &>(*evaluated_function->ultimateValue());
-	FieldSaver saved_function(context, &Context::currentFunction);
-	context.currentFunction = &cast_function;
+	// FieldSaver saved_function(context, &Context::currentFunction);
+	// context.currentFunction = &cast_function;
 
 	std::vector<Value *> argument_values;
 	argument_values.reserve(arguments.size());
@@ -651,14 +651,13 @@ Value * FunctionCall::evaluate(Context &context) {
 	for (const auto &argument: arguments)
 		argument_values.emplace_back(argument->evaluate(context));
 
-	Reference *this_obj = cast_function.thisObj;
+	Reference *this_obj = nullptr;
 
 	if (auto *evaluated_reference = evaluated_function->cast<Reference>())
 		if (auto *this_from_object = evaluated_reference->referenceContext.thisObj)
 			this_obj = this_from_object;
 
-	ClosureGuard guard(context, cast_function.closure);
-	return cast_function.function(context, argument_values, this_obj);
+	return FunctionCaller::call(&cast_function, context, argument_values, this_obj);
 }
 
 void FunctionCall::findVariables(std::vector<VariableUsage> &usages) const {
@@ -666,6 +665,15 @@ void FunctionCall::findVariables(std::vector<VariableUsage> &usages) const {
 		function->findVariables(usages);
 	for (const auto &argument: arguments)
 		argument->findVariables(usages);
+}
+
+Value * FunctionCaller::call(Function *function, Context &context, const std::vector<Value *> &arguments,
+                             Reference *this_obj) {
+	FieldSaver saved_function(context, &Context::currentFunction);
+	context.currentFunction = function;
+
+	ClosureGuard guard(context, function->closure);
+	return function->function(context, arguments, this_obj == nullptr? function->thisObj : this_obj);
 }
 
 //   ______                _   _             ______                              _
@@ -871,27 +879,39 @@ Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &
 	assert(lhs != nullptr);
 
 	auto *object = dynamic_cast<Object *>(lhs->ultimateValue());
-	if (object == nullptr)
-		throw TypeError("Can't access field of non-object " + lhs->getName());
-
-	if (auto iter = object->map.find(property); iter != object->map.end())
-		return iter->second;
+	if (object != nullptr)
+		if (auto iter = object->map.find(property); iter != object->map.end())
+			return iter->second;
 
 	try {
 		if (Object *prototype = lhs->getPrototype(context))
-			if (auto iter = prototype->map.find(property); iter != prototype->map.end())
-				return iter->second;
+			if (auto iter = prototype->map.find(property); iter != prototype->map.end()) {
+				auto *reference = iter->second->withContext({context.makeReference(lhs)});
+
+				// If the prototype member is a property function, its calling will be handled by the assignment
+				// operator. If not, we'd return the reference anyway. Therefore, we can return early here if this is a
+				// writing context.
+				if (context.writingMember)
+					return reference;
+
+				if (auto *function = reference->ultimateValue()->cast<Function>(); function && function->isProperty)
+					return FunctionCaller::call(function, context, {}, context.makeReference(lhs));
+
+				return reference;
+			}
 	} catch (const TypeError &) {
 		// TODO!: once all prototypes are implemented, let this pass through perhaps?
 	}
 
-	auto *undefined = context.makeValue<Reference>(context.makeValue<Undefined>(), false,
-		context.makeReference(object));
+	if (object != nullptr) {
+		auto *undefined = context.makeValue<Reference>(context.makeValue<Undefined>(), false,
+			context.makeReference(object));
+		if (context.writingMember)
+			return object->map[property] = undefined;
+		return undefined;
+	}
 
-	if (context.writingMember)
-		return object->map[property] = undefined;
-
-	return undefined;
+	return context.makeValue<Reference>(context.makeValue<Undefined>(), false);
 }
 
 //    ____  _     _           _   ______                              _

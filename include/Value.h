@@ -267,6 +267,9 @@ class Reference: public Value {
 		Number * toNumber() const override { assertReferent(); return referent->toNumber(); }
 		std::string getName() const override { assertReferent(); return "Reference[" + referent->getName() + ']'; }
 		bool subscriptable() const override { assertReferent(); return referent->subscriptable(); }
+
+		Reference * withContext(ReferenceContext) const;
+
 		explicit operator std::string() const override;
 		explicit operator double()      const override;
 		explicit operator bool()        const override;
