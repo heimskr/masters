@@ -54,7 +54,7 @@ $(PARSERCPP:.cpp=.o): $(PARSERCPP) $(PARSERHDR)
 	$(COMPILER) $(CFLAGS) $(LEXFLAGS) -c $< -o $@
 
 test: $(OUTPUT)
-	./$(OUTPUT) < js/prototypes.js
+	./$(OUTPUT) < js/this.js
 
 define newline
 
@@ -65,7 +65,7 @@ fulltest: $(OUTPUT)
 	$(foreach file,$(wildcard js/*.js),@ printf "\x1b[35m$(file)\x1b[39m\n" $(newline) @ ./$(OUTPUT) < $(file) $(newline))
 
 clean:
-	rm -f $(OUTPUT) src/*.o src/**/*.o PVS-Studio.log report.tasks strace_out
+	rm -f $(OUTPUT) src/*.o src/**/*.o PVS-Studio.log report.tasks strace_out $(LEXERCPP) $(PARSERCPP) $(PARSERHDR)
 
 tidy:
 	clang-tidy src/*.cpp -- $(CFLAGS)

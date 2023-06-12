@@ -140,6 +140,24 @@ static Value * doIndexOf(Context &context, const std::vector<Value *> &args, Ref
 	return context.toValue(position == std::string::npos? -1. : static_cast<double>(position));
 }
 
+static Value * doCall(Context &context, const std::vector<Value *> &args, Reference *this_obj,
+                      const std::vector<Value *> &assembled) {
+	Reference *new_this = nullptr;
+
+	if (args.empty()) {
+		new_this = context.makeReference<Undefined>();
+	} else {
+		new_this = args.front()->cast<Reference>();
+		if (new_this == nullptr)
+			new_this = context.makeReference(args.front());
+	}
+
+	Function *function = this_obj->ultimateValue()->cast<Function>();
+	assert(function != nullptr);
+
+	return function->function(context, assembled, new_this);
+}
+
 #define UNIMPLEMENTED(fn) {#fn, {[](Context &, auto &, Reference *) -> Value * { \
 	throw Unimplemented("Prototype function " #fn " unimplemented"); \
 }}},
@@ -261,6 +279,29 @@ void Context::addDefaults() {
 			out += static_cast<char>(char_code);
 		}
 		return context.makeValue<String>(std::move(out));
+	});
+
+	auto *function = makeGlobal<Object>("Function");
+
+	(*function)["prototype"] = makePrototype({
+		{"call", {[](Context &context, auto &args, Reference *this_obj) -> Value * {
+			std::vector<Value *> assembled_args;
+			if (1 < args.size())
+				assembled_args = {args.begin() + 1, args.end()};
+			return doCall(context, args, this_obj, assembled_args);
+		}}},
+		{"apply", {[](Context &context, const std::vector<Value *> &args, Reference *this_obj) -> Value * {
+			std::vector<Value *> assembled_args;
+
+			if (2 <= args.size())
+				if (auto *array = args.at(1)->template cast<Array>()) {
+					auto holeless_copy = array->holelessCopy();
+					auto holeless_values = std::get<Array::Holeless>(holeless_copy->values);
+					assembled_args = {holeless_values.begin(), holeless_values.end()};
+				}
+
+			return doCall(context, args, this_obj, assembled_args);
+		}}},
 	});
 }
 

@@ -269,10 +269,10 @@ string: JSTOK_STRING;
 
 boolean: "true" | "false";
 
-function_call: expr "(" exprlist_ ")" { $$ = $2->adopt({$1, $3}); D($4); };
+function_call: full_expr "(" exprlist_ ")" { $$ = $2->adopt({$1, $3}); D($4); };
 
-exprlist: exprlist "," expr { $$ = $1->adopt($3); D($2); }
-        | expr              { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); };
+exprlist: exprlist "," full_expr { $$ = $1->adopt($3); D($2); }
+        | full_expr              { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); };
 
 exprlist_: exprlist
          | { $$ = new ASTNode(jsParser, JS_LIST); };
@@ -296,8 +296,7 @@ object_list: object_list "," object_item { $$ = $1->adopt($3); D($2); }
 object_item: ident { $$ = $1->adopt($1->copy()); }
            | ident ":" full_expr { $$ = $1->adopt($3); D($2); };
 
-array: "[" "]" { $$ = $1; $$->symbol = JS_ARRAY; D($2); }
-     | "[" array_list "]" { $$ = $1->adopt($2); $$->symbol = JS_ARRAY; D($3); }
+array: "[" array_list "]" { $$ = $1->adopt($2); $$->symbol = JS_ARRAY; D($3); }
 
 array_list: full_expr { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); }
           | { $$ = (new ASTNode(jsParser, JS_LIST))->adopt(new ASTNode(jsParser, JS_EMPTY)); }

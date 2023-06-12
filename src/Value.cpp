@@ -110,8 +110,24 @@ Value * Array::copy() const {
 	const auto &holeless = std::get<Holeless>(values);
 	Holeless copies;
 	for (const auto &reference: holeless)
-		copies.push_back(make<Reference>(reference->referent));
+		// copies.push_back(make<Reference>(reference->referent));
+		copies.push_back(reference); // TODO: verify
 	return (new Array(std::move(copies)))->setContext(*context);
+}
+
+Array * Array::holelessCopy() const {
+	if (!isHoley())
+		return copy()->cast<Array>();
+
+	Holeless new_values;
+	const auto &holey = std::get<Holey>(values);
+	for (const auto &[key, reference]: holey) {
+		while (new_values.size() < key)
+			new_values.push_back(context->makeReference<Undefined>());
+		new_values.push_back(reference);
+	}
+
+	return context->makeValue<Array>(std::move(new_values));
 }
 
 Number * Array::toNumber() const {
@@ -237,12 +253,24 @@ std::unordered_set<Value *> Object::getReferents() const {
 	return out;
 }
 
+Value * Null::copy() const {
+	return context->makeValue<Null>();
+}
+
 Number * Null::toNumber() const {
 	return make<Number>(0.);
 }
 
+Value * Undefined::copy() const {
+	return context->makeValue<Undefined>();
+}
+
 Number * Undefined::toNumber() const {
 	return make<Number>(nan(""));
+}
+
+Value * Number::copy() const {
+	return context->makeValue<Number>(number);
 }
 
 Number * Number::toNumber() const {
@@ -259,8 +287,16 @@ Number::operator std::string() const {
 	return out;
 }
 
+Value * Boolean::copy() const {
+	return context->makeValue<Boolean>(boolean);
+}
+
 Number * Boolean::toNumber() const {
 	return make<Number>(boolean? 1. : 0.);
+}
+
+Value * String::copy() const {
+	return context->makeValue<String>(string);
 }
 
 String::operator double() const {
@@ -553,6 +589,10 @@ Function::Function(FunctionType function_, Reference *this_obj, Closure closure_
 	thisObj(this_obj),
 	closure(std::move(closure_)),
 	isProperty(is_property) {}
+
+Value * Function::copy() const {
+	return context->makeValue<Function>(function, thisObj, closure);
+}
 
 Number * Function::toNumber() const {
 	return make<Number>(nan(""));
