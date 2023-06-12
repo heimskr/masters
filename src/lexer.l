@@ -22,7 +22,7 @@
 JS_DECIMAL      ([0-9]+)
 JS_HEX          (0x[0-9a-fA-F]+)
 JS_BINARY       (0b[01]+)
-JS_FLOATING     ("-"?[0-9]+"."[0-9]+("e"[+\-][0-9]+)?)
+JS_FLOATING     ("-"?([0-9]+"."[0-9]+|[0-9]+"."|"."[0-9]+)("e"[+\-]?[0-9]+)?)
 JS_IDENT        ([a-zA-Z_$][$a-zA-Z_0-9]*)
 JS_DSTRING      (\"([^\\"\n]|\\([\\"nratbe0]|x[0-9a-fA-F][0-9a-fA-F]))*\")
 JS_SSTRING      (\'([^\\'\n]|\\([\\'nratbe0]|x[0-9a-fA-F][0-9a-fA-F]))*\')
