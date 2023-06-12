@@ -131,6 +131,10 @@ class Context {
 			return makeValue<String>(std::move(string));
 		}
 
+		inline String * toValue(const char *string) {
+			return makeValue<String>(std::string(string));
+		}
+
 		template <Numeric N>
 		inline Number * toValue(N number) {
 			return makeValue<Number>(static_cast<double>(number));

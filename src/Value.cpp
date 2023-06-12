@@ -24,9 +24,13 @@ Object * Value::getPrototype(Context &context) const {
 		return customPrototype;
 
 	if (auto iter = context.stack.globals.find(className()); iter != context.stack.globals.end()) {
-		auto *object = dynamic_cast<Object *>(iter->second->referent);
+		auto *object = iter->second->referent->cast<Object>();
 		assert(object != nullptr);
-		return object;
+		if (auto iter = object->map.find("prototype"); iter != object->map.end()) {
+			auto *prototype = iter->second->referent->cast<Object>();
+			assert(prototype != nullptr);
+			return prototype;
+		}
 	}
 
 	throw TypeError("Cannot get prototype of type " + getName());
