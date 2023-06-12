@@ -12,6 +12,7 @@
 
 class Context;
 class Number;
+class Object;
 
 #define VALUE_OPERATOR_OVERRIDES \
 	virtual Value * operator==(const Value &) const override;
@@ -26,22 +27,32 @@ class Value {
 	public:
 		Context *context = nullptr;
 		virtual ~Value() = default;
+
 		virtual Value * copy() const = 0;
+
 		virtual ValueType getType() const = 0;
+		virtual std::string getName() const = 0;
+		virtual std::unordered_set<Value *> getReferents() const { return {}; }
+
 		virtual const Value * ultimateValue() const { return this; }
 		virtual Value * ultimateValue() { return this; }
 		virtual ValueType ultimateType() const { return getType(); }
-		virtual std::unordered_set<Value *> getReferents() const { return {}; }
+
+		virtual bool subscriptable() const { return false; }
 		virtual Number * toNumber() const {
 			throw std::runtime_error("Cannot convert value of type " + getName() + " to a number");
 		}
+
+		virtual Object * getPrototype() const {
+			throw TypeError("Cannot get prototype of type " + getName());
+		}
+
 		virtual explicit operator bool() const = 0;
 		virtual explicit operator std::string() const = 0;
 		virtual explicit operator double() const = 0;
 		virtual explicit operator int64_t()  const { return static_cast<int64_t>(static_cast<double>(*this));  }
 		virtual explicit operator uint64_t() const { return static_cast<uint64_t>(static_cast<double>(*this)); }
-		virtual std::string getName() const = 0;
-		virtual bool subscriptable() const { return false; }
+
 		virtual Value * operator+(const Value &)  const;
 		virtual Value * operator-(const Value &)  const;
 		virtual Value * operator*(const Value &)  const;

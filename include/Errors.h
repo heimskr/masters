@@ -46,3 +46,7 @@ struct ReferenceError: JSError {
 struct TypeError: JSError {
 	using JSError::JSError;
 };
+
+struct SyntaxError: JSError {
+	using JSError::JSError;
+};

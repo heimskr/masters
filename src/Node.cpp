@@ -188,6 +188,11 @@ void VariableDefinitions::findVariables(std::vector<VariableUsage> &usages) cons
 		definition->findVariables(usages);
 }
 
+void VariableDefinitions::validateInSingleStatementContext() const {
+	if (kind == DeclarationKind::Let || kind == DeclarationKind::Const)
+		throw SyntaxError("Lexical declaration cannot appear in a single-statement context");
+}
+
 //
 // IfStatement
 //
@@ -219,10 +224,13 @@ WhileLoop::WhileLoop(const ASTNode &node):
 	body(Statement::create(*node.at(1))) { absorbPosition(node); }
 
 std::pair<Result, Value *> WhileLoop::interpret(Context &context) {
+	body->validateInSingleStatementContext();
+
+	// Pushing/popping the scope stack isn't necessary because there's no need for it in a non-block statement
+	// (let/const is invalid in a single-statement context) and a block does it itself.
+
 	while (condition->evaluate(context)) {
 		const auto [result, value] = body->interpret(context);
-		if (result == Result::Continue)
-			continue;
 		if (result == Result::Break)
 			return {Result::None, value};
 		if (result == Result::Return)
@@ -233,6 +241,47 @@ std::pair<Result, Value *> WhileLoop::interpret(Context &context) {
 }
 
 void WhileLoop::findVariables(std::vector<VariableUsage> &usages) const {
+	assert(condition);
+	condition->findVariables(usages);
+}
+
+//
+// ForLoop
+//
+
+ForLoop::ForLoop(const ASTNode &node):
+	setup(Statement::create(*node.at(0))),
+	condition(Expression::create(*node.at(1))),
+	postaction(Expression::create(*node.at(2))),
+	body(Statement::create(*node.at(3))) { absorbPosition(node); }
+
+std::pair<Result, Value *> ForLoop::interpret(Context &context) {
+	body->validateInSingleStatementContext();
+
+	// Unlike in a while loop, pushing/popping the scope stack is necessary because any variable declarations inside
+	// the for loop's setup statement can't interfere with the outer scope.
+
+	context.stack.push();
+	setup->interpret(context);
+
+	while (condition->evaluate(context)) {
+		const auto [result, value] = body->interpret(context);
+
+		if (result == Result::Break)
+			return {Result::None, value};
+
+		if (result == Result::Return)
+			return {Result::Return, value};
+
+		postaction->interpret(context);
+	}
+
+	context.stack.pop();
+
+	return {Result::None, nullptr};
+}
+
+void ForLoop::findVariables(std::vector<VariableUsage> &usages) const {
 	assert(condition);
 	condition->findVariables(usages);
 }
@@ -480,11 +529,11 @@ Value * UnaryExpression::evaluate(Context &context) {
 			auto *lvalue = dynamic_cast<LValueExpression *>(subexpr.get());
 			assert(lvalue != nullptr);
 			auto *subvalue = lvalue->evaluate(context);
-			assert(subvalue);
-			assert(lvalue->referenced);
-			if (subvalue->getType() != ValueType::Number)
+			assert(subvalue != nullptr);
+			assert(subvalue->getType() == ValueType::Reference);
+			if (subvalue->ultimateType() != ValueType::Number)
 				return context.makeValue<Number>(nan(""));
-			auto *number = dynamic_cast<Number *>(subvalue);
+			auto *number = dynamic_cast<Number *>(subvalue->ultimateValue());
 			double new_value = nan("");
 			switch (type) {
 				case Type::PrefixIncrement:  new_value = ++number->number; break;
@@ -494,7 +543,7 @@ Value * UnaryExpression::evaluate(Context &context) {
 				default: std::terminate();
 			}
 			auto *out = context.makeValue<Number>(new_value);
-			*lvalue->referenced = number;
+			dynamic_cast<Reference *>(subvalue)->referent = number;
 			return out;
 		}
 
@@ -637,6 +686,9 @@ std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 			break;
 		case JSTOK_WHILE:
 			out = std::make_unique<WhileLoop>(node);
+			break;
+		case JSTOK_FOR:
+			out = std::make_unique<ForLoop>(node);
 			break;
 		case JSTOK_CONTINUE:
 			out = std::make_unique<Continue>();
@@ -942,6 +994,29 @@ void ArrayExpression::findVariables(std::vector<VariableUsage> &usages) const {
 }
 
 //
+// ObjectAccessor
+//
+
+Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &property) {
+	assert(lhs != nullptr);
+
+	auto *object = dynamic_cast<Object *>(lhs->ultimateValue());
+	if (object == nullptr)
+		throw TypeError("Can't access field of non-object " + lhs->getName());
+
+	if (auto iter = object->map.find(property); iter != object->map.end())
+		return iter->second;
+
+	auto *undefined = context.makeValue<Reference>(context.makeValue<Undefined>(), false,
+		context.makeReference(object));
+
+	if (context.writingMember)
+		return object->map[property] = undefined;
+
+	return undefined;
+}
+
+//
 // DotExpression
 //
 
@@ -960,21 +1035,10 @@ Value * DotExpression::evaluate(Context &context) {
 	// TODO: update when boxing support is added
 	if (lhs->ultimateType() != ValueType::Object) {
 		WARN("LHS type: " << lhs->getName());
-		throw TypeError("Can't use . operator on non-object", location);
+		throw TypeError("Can't use . operator on non-object " + lhs->getName(), location);
 	}
 
-	auto *object = dynamic_cast<Object *>(lhs->ultimateValue());
-
-	if (auto iter = object->map.find(ident); iter != object->map.end())
-		return iter->second;
-
-	auto *undefined_ref = context.makeValue<Reference>(context.makeValue<Undefined>(), false,
-		context.makeReference(object));
-
-	if (context.writingMember)
-		return object->map[ident] = undefined_ref;
-
-	return undefined_ref;
+	return access(context, lhs->ultimateValue(), ident);
 }
 
 void DotExpression::findVariables(std::vector<VariableUsage> &usages) const {
@@ -1011,21 +1075,8 @@ Value * AccessExpression::evaluate(Context &context) {
 	}
 
 	switch (lhs->ultimateType()) {
-		case ValueType::Object: {
-			auto *object = dynamic_cast<Object *>(lhs->ultimateValue());
-			const auto stringified = static_cast<std::string>(*rhs);
-
-			if (auto iter = object->map.find(stringified); iter != object->map.end())
-				return iter->second;
-
-			auto *undefined_ref = context.makeValue<Reference>(context.makeValue<Undefined>(), false,
-				context.makeReference(object));
-
-			if (context.writingMember)
-				return object->map[stringified] = undefined_ref;
-
-			return undefined_ref;
-		}
+		case ValueType::Object:
+			return access(context, lhs->ultimateValue(), static_cast<std::string>(*rhs));
 
 		case ValueType::Array: {
 			auto *reference = dynamic_cast<Reference *>(lhs);

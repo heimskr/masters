@@ -25,7 +25,7 @@ enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
 	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return, ObjectExpression,
 	DotExpression, NumberLiteral, StringLiteral, BooleanLiteral, ArrayExpression, AccessExpression, UndefinedLiteral,
-	NullLiteral,
+	NullLiteral, ForLoop,
 };
 
 struct VariableUsage {
@@ -58,6 +58,8 @@ class Node {
 		void assertType(NodeType);
 
 		static std::unique_ptr<Node> fromAST(const ASTNode &);
+
+		virtual void validateInSingleStatementContext() const {}
 
 	protected:
 		void absorbPosition(const ASTNode &);
@@ -102,9 +104,6 @@ class Expression: public Statement {
 };
 
 class LValueExpression: public Expression {
-	public:
-		Value **referenced = nullptr;
-
 	protected:
 		LValueExpression() = default;
 };
@@ -219,6 +218,7 @@ class VariableDefinitions: public Statement {
 		NodeType getType() const override { return NodeType::VariableDefinitions; }
 		std::pair<Result, Value *> interpret(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override;
+		void validateInSingleStatementContext() const override;
 };
 
 class IfStatement: public Statement {
@@ -242,6 +242,20 @@ class WhileLoop: public Statement {
 		WhileLoop(const ASTNode &);
 
 		NodeType getType() const override { return NodeType::WhileLoop; }
+		std::pair<Result, Value *> interpret(Context &) override;
+		void findVariables(std::vector<VariableUsage> &) const override;
+};
+
+class ForLoop: public Statement {
+	public:
+		std::unique_ptr<Statement> setup;
+		std::unique_ptr<Expression> condition;
+		std::unique_ptr<Expression> postaction;
+		std::unique_ptr<Statement> body;
+
+		ForLoop(const ASTNode &);
+
+		NodeType getType() const override { return NodeType::ForLoop; }
 		std::pair<Result, Value *> interpret(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override;
 };
@@ -354,7 +368,11 @@ class ArrayExpression: public Expression {
 		bool isHoley = false;
 };
 
-class DotExpression: public Expression {
+struct ObjectAccessor {
+	static Value * access(Context &context, Value *, const std::string &);
+};
+
+class DotExpression: public Expression, public ObjectAccessor {
 	public:
 		std::unique_ptr<Expression> base;
 		std::string ident;
@@ -366,7 +384,7 @@ class DotExpression: public Expression {
 		void findVariables(std::vector<VariableUsage> &) const override;
 };
 
-class AccessExpression: public Expression {
+class AccessExpression: public Expression, public ObjectAccessor {
 	public:
 		std::unique_ptr<Expression> base;
 		std::unique_ptr<Expression> subscript;
