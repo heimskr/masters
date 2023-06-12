@@ -194,6 +194,16 @@ void Context::addDefaults() {
 				return context.toValue(false);
 			}
 		}}},
+		{"includes", {[](Context &context, auto &args, Reference *this_obj) {
+			if (args.empty())
+				return context.toValue(false);
+
+			auto *string = this_obj->ultimateValue()->cast<String>();
+			assert(string != nullptr);
+
+			const auto arg = static_cast<std::string>(*args.front());
+			return context.toValue(arg.empty() || string->string.find(arg) != std::string::npos);
+		}}},
 	});
 	(*string)["fromCharCode"] = makeReference<Function>([](Context &context, const auto &args, auto) {
 		std::string out;
