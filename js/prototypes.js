@@ -18,3 +18,6 @@ print(String.fromCharCode(100) === "d", String.fromCharCode(101) !== "d",
       String.fromCharCode(100, 101, 97, 100, "98", 101, 101, 102) === "deadbeef", String.fromCharCode() === "",
       !String.fromCharCode());
 print(!"foo".includes(), !"".includes(), "".includes(""), "foo".includes(""), "foo".includes("fo"));
+print("foo".indexOf("") === 0, "foo".indexOf() === -1, "undefined".indexOf() === 0);
+print("undefinedundefined".indexOf(undefined, 1) === 9, "foo".indexOf("f") === 0, "foo".indexOf("o") === 1);
+print("foo".indexOf("o", 1) === 1, "fobo".indexOf("o", 2) === 3, "foo".indexOf("o", 3) === -1);

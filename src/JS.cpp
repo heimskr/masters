@@ -204,6 +204,23 @@ void Context::addDefaults() {
 			const auto arg = static_cast<std::string>(*args.front());
 			return context.toValue(arg.empty() || string->string.find(arg) != std::string::npos);
 		}}},
+		{"indexOf", {[](Context &context, auto &args, Reference *this_obj) {
+			auto *string = this_obj->ultimateValue()->cast<String>();
+			assert(string != nullptr);
+
+			const auto arg = args.empty()? "undefined" : static_cast<std::string>(*args.front());
+			size_t start = 0;
+			if (1 < args.size()) {
+				const auto number = static_cast<double>(*args[1]);
+				if (std::isinf(number))
+					return context.toValue(-1.);
+				if (!std::isnan(number))
+					start = static_cast<size_t>(number);
+			}
+
+			const size_t position = string->string.find(arg, start);
+			return context.toValue(position == std::string::npos? -1. : static_cast<double>(position));
+		}}},
 	});
 	(*string)["fromCharCode"] = makeReference<Function>([](Context &context, const auto &args, auto) {
 		std::string out;
