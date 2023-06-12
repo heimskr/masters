@@ -7,6 +7,7 @@
 #include <variant>
 #include <vector>
 
+#include "Concepts.h"
 #include "Node.h"
 #include "Utils.h"
 #include "Value.h"
@@ -62,6 +63,13 @@ class Globals {
 		inline auto end()   const { return values.end();   }
 };
 
+struct PrototypeMethod {
+	Function::FunctionType function;
+	bool isProperty;
+	PrototypeMethod(Function::FunctionType function_, bool is_property = false):
+		function(std::move(function_)), isProperty(is_property) {}
+};
+
 class Context {
 	public:
 		std::unordered_set<Value *> valuePool;
@@ -77,6 +85,7 @@ class Context {
 
 		void addDefaults();
 		void garbageCollect();
+		Reference * makePrototype(const std::unordered_map<std::string, PrototypeMethod> &);
 
 		template <typename T, typename... Args>
 		T * makeValue(Args &&...args) {
@@ -112,8 +121,27 @@ class Context {
 		}
 
 		template <typename T, typename... Args>
-		inline void makeGlobal(const std::string &name, Args &&...args) {
-			return addGlobal(name, makeValue<T>(std::forward<Args>(args)...));
+		inline T * makeGlobal(const std::string &name, Args &&...args) {
+			T *value = makeValue<T>(std::forward<Args>(args)...);
+			addGlobal(name, value);
+			return value;
+		}
+
+		inline String * toValue(std::string string) {
+			return makeValue<String>(std::move(string));
+		}
+
+		template <Numeric N>
+		inline Number * toValue(N number) {
+			return makeValue<Number>(static_cast<double>(number));
+		}
+
+		inline Boolean * toValue(bool boolean) {
+			return makeValue<Boolean>(boolean);
+		}
+
+		inline Function * toValue(Function::FunctionType fn, Reference *this_obj = nullptr, Closure closure = {}) {
+			return makeValue<Function>(std::move(fn), this_obj, std::move(closure));
 		}
 };
 

@@ -13,6 +13,25 @@ T * Value::make(Args &&...args) const {
 	return context->makeValue<T>(std::forward<Args>(args)...);
 }
 
+std::unordered_set<Value *> Value::getReferents() const {
+	if (customPrototype != nullptr)
+		return {customPrototype};
+	return {};
+}
+
+Object * Value::getPrototype(Context &context) const {
+	if (customPrototype != nullptr)
+		return customPrototype;
+
+	if (auto iter = context.stack.globals.find(className()); iter != context.stack.globals.end()) {
+		auto *object = dynamic_cast<Object *>(iter->second->referent);
+		assert(object != nullptr);
+		return object;
+	}
+
+	throw TypeError("Cannot get prototype of type " + getName());
+}
+
 Array::operator std::string() const {
 	std::ostringstream oss;
 
@@ -62,14 +81,16 @@ Array::operator double() const {
 }
 
 std::unordered_set<Value *> Array::getReferents() const {
+	auto out = Value::getReferents();
+
 	if (!isHoley()) {
 		const auto &holeless = std::get<Holeless>(values);
-		return {holeless.begin(), holeless.end()};
+		out.insert(holeless.begin(), holeless.end());
+	} else {
+		for (const auto &[key, value]: std::get<Holey>(values))
+			out.insert(value);
 	}
 
-	std::unordered_set<Value *> out;
-	for (const auto &[key, value]: std::get<Holey>(values))
-		out.insert(value);
 	return out;
 }
 
@@ -205,8 +226,8 @@ Object::operator std::string() const {
 }
 
 std::unordered_set<Value *> Object::getReferents() const {
-	std::unordered_set<Value *> out;
-	out.reserve(map.size());
+	auto out = Value::getReferents();
+	out.reserve(map.size() + 1); // + 1 for customPrototype
 	for (const auto &[name, value]: map)
 		out.insert(value);
 	return out;
@@ -398,7 +419,9 @@ ValueType Reference::ultimateType() const {
 
 std::unordered_set<Value *> Reference::getReferents() const {
 	assertReferent();
-	return {referent};
+	auto out = Value::getReferents();
+	out.insert(referent);
+	return out;
 }
 
 Reference::operator std::string() const {
@@ -516,10 +539,11 @@ Value * Reference::shiftRightArithmetic(const Value &other) const {
 	return referent->shiftRightArithmetic(other);
 }
 
-Function::Function(FunctionType function_, Reference *this_obj, Closure closure_):
+Function::Function(FunctionType function_, Reference *this_obj, Closure closure_, bool is_property):
 	function(std::move(function_)),
 	thisObj(this_obj),
-	closure(std::move(closure_)) {}
+	closure(std::move(closure_)),
+	isProperty(is_property) {}
 
 Number * Function::toNumber() const {
 	return make<Number>(nan(""));
@@ -530,7 +554,8 @@ Value * Function::operator==(const Value &other) const {
 }
 
 std::unordered_set<Value *> Function::getReferents() const {
-	std::unordered_set<Value *> out = {closure.references.begin(), closure.references.end()};
+	auto out = Value::getReferents();
+	out.insert(closure.references.begin(), closure.references.end());
 	if (thisObj != nullptr)
 		out.insert(thisObj);
 	return out;

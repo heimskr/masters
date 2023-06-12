@@ -692,7 +692,8 @@ Value * FunctionExpression::evaluate(Context &context) {
 	else
 		this_obj = context.stack.lookup("this");
 
-	return context.makeValue<Function>([this](Context &context, const std::vector<Value *> &argument_values, Reference *this_obj) {
+	return context.makeValue<Function>([this](Context &context, const std::vector<Value *> &argument_values,
+	                                          Reference *this_obj) {
 		context.stack.push();
 
 		size_t i = 0;
@@ -875,6 +876,14 @@ Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &
 
 	if (auto iter = object->map.find(property); iter != object->map.end())
 		return iter->second;
+
+	try {
+		if (Object *prototype = lhs->getPrototype(context))
+			if (auto iter = prototype->map.find(property); iter != prototype->map.end())
+				return iter->second;
+	} catch (const TypeError &) {
+		// TODO!: once all prototypes are implemented, let this pass through perhaps?
+	}
 
 	auto *undefined = context.makeValue<Reference>(context.makeValue<Undefined>(), false,
 		context.makeReference(object));

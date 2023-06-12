@@ -79,6 +79,27 @@ void Context::addDefaults() {
 		context.garbageCollect();
 		return context.makeValue<Number>(old_size - context.valuePool.size());
 	});
+
+	auto *object = makeGlobal<Object>("Object");
+	(*object)["prototype"] = makePrototype({
+		{"toString", {[](Context &context, auto &, auto) {
+			return context.toValue("[object Object]");
+		}}},
+	});
+
+	auto *string = makeGlobal<Object>("String");
+	(*string)["prototype"] = makePrototype({
+		{"toString", {[](Context &context, auto &, Reference *this_obj) {
+			// Just copy the string.
+			return context.toValue(this_obj->referent->cast<String>()->string);
+		}}},
+		{"length", {[](Context &context, auto &args, Reference *this_obj) {
+			// Since this is a property, args must have at most a single member (the value to write, if any).
+			// We ignore it because length isn't assignable.
+			assert(args.size() <= 1);
+			return context.toValue(this_obj->referent->cast<String>()->string.size());
+		}, true}},
+	});
 }
 
 void Context::garbageCollect() {
@@ -109,4 +130,16 @@ void Context::garbageCollect() {
 		valuePool.erase(value);
 		delete value;
 	}
+}
+
+Reference * Context::makePrototype(const std::unordered_map<std::string, PrototypeMethod> &map) {
+	Object *prototype = makeValue<Object>();
+
+	for (const auto &[method_name, method]: map) {
+		Function *function = makeValue<Function>(method.function);
+		function->isProperty = method.isProperty;
+		prototype->map[method_name] = makeReference(function);
+	}
+
+	return makeReference(prototype);
 }

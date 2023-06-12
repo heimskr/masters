@@ -26,13 +26,15 @@ enum class ValueType {Null, Undefined, Object, Array, Number, Boolean, String, R
 class Value {
 	public:
 		Context *context = nullptr;
+		Object *customPrototype = nullptr;
 		virtual ~Value() = default;
 
 		virtual Value * copy() const = 0;
 
 		virtual ValueType getType() const = 0;
 		virtual std::string getName() const = 0;
-		virtual std::unordered_set<Value *> getReferents() const { return {}; }
+		virtual std::string className() const = 0;
+		virtual std::unordered_set<Value *> getReferents() const;
 
 		virtual const Value * ultimateValue() const { return this; }
 		virtual Value * ultimateValue() { return this; }
@@ -43,9 +45,7 @@ class Value {
 			throw std::runtime_error("Cannot convert value of type " + getName() + " to a number");
 		}
 
-		virtual Object * getPrototype() const {
-			throw TypeError("Cannot get prototype of type " + getName());
-		}
+		virtual Object * getPrototype(Context &) const;
 
 		virtual explicit operator bool() const = 0;
 		virtual explicit operator std::string() const = 0;
@@ -106,6 +106,7 @@ class Null: public Value {
 	public:
 		Null() = default;
 		Value * copy() const override { return (new Null)->setContext(*context); }
+		std::string className() const override { return "Null"; }
 		ValueType getType() const override { return ValueType::Null; };
 		Number * toNumber() const override;
 		std::string getName() const override { return "Null"; }
@@ -120,6 +121,7 @@ class Undefined: public Value {
 	public:
 		Undefined() = default;
 		Value * copy() const override { return (new Undefined)->setContext(*context); }
+		std::string className() const override { return "Undefined"; }
 		ValueType getType() const override { return ValueType::Undefined; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Undefined"; }
@@ -143,6 +145,7 @@ class Array: public Value {
 		Array(Holeless values_): values(std::move(values_)) {}
 		Array(Holey values_, size_t holey_length): values(std::move(values_)), holeyLength(holey_length) {}
 		Value * copy() const override;
+		std::string className() const override { return "Array"; }
 		ValueType getType() const override { return ValueType::Array; }
 		std::unordered_set<Value *> getReferents() const override;
 		Number * toNumber() const override;
@@ -171,6 +174,7 @@ class Object: public Value {
 		Object() = default;
 		Object(const Array &);
 		Value * copy() const override;
+		std::string className() const override { return "Object"; }
 		ValueType getType() const override { return ValueType::Object; }
 		std::unordered_set<Value *> getReferents() const override;
 		Number * toNumber() const override;
@@ -179,6 +183,7 @@ class Object: public Value {
 		explicit operator std::string() const override;
 		explicit operator double() const override { return nan(""); }
 		explicit operator bool() const override { return true; }
+		inline Reference *& operator[](const std::string &key) { return map[key]; }
 		VALUE_OPERATOR_OVERRIDES
 		VALUE_USING
 };
@@ -188,6 +193,7 @@ class Number: public Value {
 		double number;
 		Number(double number_): number(number_) {}
 		Value * copy() const override { return (new Number(number))->setContext(*context); }
+		std::string className() const override { return "Number"; }
 		ValueType getType() const override { return ValueType::Number; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Number"; }
@@ -203,6 +209,7 @@ class Boolean: public Value {
 		bool boolean;
 		Boolean(double boolean_): boolean(boolean_) {}
 		Value * copy() const override { return (new Boolean(boolean))->setContext(*context); }
+		std::string className() const override { return "Boolean"; }
 		ValueType getType() const override { return ValueType::Boolean; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Boolean"; }
@@ -218,6 +225,7 @@ class String: public Value {
 		std::string string;
 		String(std::string string_): string(std::move(string_)) {}
 		Value * copy() const override { return (new String(string))->setContext(*context); }
+		std::string className() const override { return "String"; }
 		ValueType getType() const override { return ValueType::String; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "String"; }
@@ -249,6 +257,7 @@ class Reference: public Value {
 
 		/** Note: this creates a copy of the referred-to value, not of the reference! */
 		Value * copy() const override { assertReferent(); return referent->copy(); }
+		std::string className() const override { return referent->className(); }
 		ValueType getType() const override { return ValueType::Reference; }
 		const Value * ultimateValue() const override { assertReferent(); return referent->ultimateValue(); }
 		Value * ultimateValue() override { assertReferent(); return referent->ultimateValue(); }
@@ -291,9 +300,12 @@ class Function: public Value {
 		FunctionType function;
 		Reference *thisObj = nullptr;
 		Closure closure;
-		Function(FunctionType function_ = {}, Reference *this_obj = nullptr, Closure closure_ = {});
+		bool isProperty = false;
+		Function(FunctionType function_ = {}, Reference *this_obj = nullptr, Closure closure_ = {},
+		         bool is_property = false);
 		/** This doesn't deep-clone thisObj. */
 		Value * copy() const override { return (new Function(function, thisObj, closure))->setContext(*context); }
+		std::string className() const override { return "Function"; }
 		std::unordered_set<Value *> getReferents() const override;
 		ValueType getType() const override { return ValueType::Function; }
 		Number * toNumber() const override;
