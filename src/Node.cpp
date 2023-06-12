@@ -521,6 +521,8 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 			break;
 
 		case JSTOK_NUMBER:
+		case JSTOK_NAN:
+		case JSTOK_INFINITY:
 			out = std::make_unique<NumberLiteral>(node);
 			break;
 

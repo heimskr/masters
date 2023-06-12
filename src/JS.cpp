@@ -1,3 +1,4 @@
+#include <cmath>
 #include <functional>
 #include <iostream>
 
@@ -65,12 +66,44 @@ bool Globals::contains(Value *value) const {
 	return false;
 }
 
+static String * doSubstring(Context &context, const std::vector<Value *> &args, Reference *this_obj, bool is_substr) {
+	auto *string = this_obj->ultimateValue()->cast<String>();
+	assert(string != nullptr);
+
+	size_t start = 0;
+	size_t count = std::string::npos;
+
+	if (!args.empty()) {
+		if (const auto first = static_cast<double>(*args.front()); isFinite(first))
+			start = static_cast<size_t>(first);
+
+		if (1 < args.size())
+			if (const auto second = static_cast<double>(*args[1]); isFinite(second))
+				count = static_cast<size_t>(second);
+	}
+
+	if (string->string.size() <= start || (!is_substr && count <= start))
+		return context.toValue("");
+
+	if (!is_substr)
+		count -= start;
+
+	return context.toValue(string->string.substr(start, count));
+}
+
 void Context::addDefaults() {
 	makeGlobal<Object>("this");
 
 	makeGlobal<Function>("print", [](Context &context, const std::vector<Value *> &arguments, Value *) {
-		for (Value *value: arguments)
-			std::cout << static_cast<std::string>(*value) << std::endl;
+		bool first = true;
+		for (Value *value: arguments) {
+			if (first == true)
+				first = false;
+			else
+				std::cout << ' ';
+			std::cout << static_cast<std::string>(*value);
+		}
+		std::cout << std::endl;
 		return context.makeValue<Undefined>();
 	});
 
@@ -99,6 +132,26 @@ void Context::addDefaults() {
 			assert(args.size() <= 1);
 			return context.toValue(this_obj->referent->cast<String>()->string.size());
 		}, true}},
+		{"substr", {[](Context &context, auto &args, Reference *this_obj) {
+			return doSubstring(context, args, this_obj, true);
+		}}},
+		{"substring", {[](Context &context, auto &args, Reference *this_obj) {
+			return doSubstring(context, args, this_obj, false);
+		}}},
+		{"charAt", {[](Context &context, auto &args, Reference *this_obj) {
+			auto *string = this_obj->ultimateValue()->cast<String>();
+			assert(string != nullptr);
+
+			size_t index = 0;
+			if (!args.empty())
+				if (const auto number = static_cast<double>(*args.front()); isFinite(number))
+					index = static_cast<size_t>(number);
+
+			if (index < string->string.size())
+				return context.toValue(std::string(1, string->string.at(index)));
+
+			return context.toValue("");
+		}}},
 	});
 }
 

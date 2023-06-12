@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <csignal>
 #include <cstdint>
 #include <string>
@@ -29,6 +30,10 @@ auto end(reverse<T> r) {
 int64_t  parseLong(std::string_view, int base = 10);
 uint64_t parseUlong(std::string_view, int base = 10);
 double   parseDouble(std::string_view);
+
+inline bool isFinite(double number) {
+	return !std::isnan(number) && !std::isinf(number);
+}
 
 std::string unescapeString(std::string_view);
 
