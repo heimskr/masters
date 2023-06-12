@@ -1,7 +1,7 @@
 let this = 42;
 
 function foo() {
-	print(this);
+	console.log(this);
 };
 
 {

@@ -107,21 +107,26 @@ static String * doCharAt(Context &context, const std::vector<Value *> &args, Ref
 	return context.toValue("");
 }
 
+static Value * doPrint(Context &context, const std::vector<Value *> &arguments, Value *) {
+	bool first = true;
+	for (Value *value: arguments) {
+		if (first == true)
+			first = false;
+		else
+			std::cout << ' ';
+		std::cout << static_cast<std::string>(*value);
+	}
+	std::cout << std::endl;
+	return context.makeValue<Undefined>();
+}
+
 void Context::addDefaults() {
 	makeGlobal<Object>("this");
 
-	makeGlobal<Function>("print", [](Context &context, const std::vector<Value *> &arguments, Value *) {
-		bool first = true;
-		for (Value *value: arguments) {
-			if (first == true)
-				first = false;
-			else
-				std::cout << ' ';
-			std::cout << static_cast<std::string>(*value);
-		}
-		std::cout << std::endl;
-		return context.makeValue<Undefined>();
-	});
+	makeGlobal<Function>("print", doPrint);
+
+	auto *console = makeGlobal<Object>("console");
+	(*console)["log"] = makeReference<Function>(doPrint);
 
 	makeGlobal<Function>("gc", [](Context &context, const std::vector<Value *> &, Value *) {
 		const size_t old_size = context.valuePool.size();
@@ -130,6 +135,7 @@ void Context::addDefaults() {
 	});
 
 	auto *object = makeGlobal<Object>("Object");
+
 	(*object)["prototype"] = makePrototype({
 		{"toString", {[](Context &context, auto &, auto) {
 			return context.toValue("[object Object]");
@@ -137,6 +143,7 @@ void Context::addDefaults() {
 	});
 
 	auto *string = makeGlobal<Object>("String");
+
 	(*string)["prototype"] = makePrototype({
 		{"toString", {[](Context &context, auto &, Reference *this_obj) {
 			// Just copy the string.
@@ -222,6 +229,7 @@ void Context::addDefaults() {
 			return context.toValue(position == std::string::npos? -1. : static_cast<double>(position));
 		}}},
 	});
+
 	(*string)["fromCharCode"] = makeReference<Function>([](Context &context, const auto &args, auto) {
 		std::string out;
 		for (const Value *arg: args) {
