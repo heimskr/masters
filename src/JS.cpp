@@ -107,9 +107,9 @@ static String * doCharAt(Context &context, const std::vector<Value *> &args, Ref
 	return context.toValue("");
 }
 
-static Value * doPrint(Context &context, const std::vector<Value *> &arguments, Value *) {
+static Value * doPrint(Context &context, const std::vector<Value *> &args, Reference *) {
 	bool first = true;
-	for (Value *value: arguments) {
+	for (Value *value: args) {
 		if (first == true)
 			first = false;
 		else
@@ -119,6 +119,30 @@ static Value * doPrint(Context &context, const std::vector<Value *> &arguments, 
 	std::cout << std::endl;
 	return context.makeValue<Undefined>();
 }
+
+static Value * doIndexOf(Context &context, const std::vector<Value *> &args, Reference *this_obj,
+                         size_t (std::string::*finder)(const std::string &, size_t) const) {
+	auto *string = this_obj->ultimateValue()->cast<String>();
+	assert(string != nullptr);
+
+	const auto arg = args.empty()? "undefined" : static_cast<std::string>(*args.front());
+	size_t start = 0;
+	if (1 < args.size()) {
+		const auto number = static_cast<double>(*args[1]);
+		if (std::isinf(number))
+			return context.toValue(-1.);
+		if (!std::isnan(number))
+			start = static_cast<size_t>(number);
+	}
+
+	// const size_t position = string->string.*finder(arg, start);
+	const size_t position = std::invoke(finder, string->string, arg, start);
+	return context.toValue(position == std::string::npos? -1. : static_cast<double>(position));
+}
+
+#define UNIMPLEMENTED(fn) {#fn, {[](Context &, auto &, Reference *) -> Value * { \
+	throw Unimplemented("Prototype function " #fn " unimplemented"); \
+}}},
 
 void Context::addDefaults() {
 	makeGlobal<Object>("this");
@@ -212,22 +236,19 @@ void Context::addDefaults() {
 			return context.toValue(arg.empty() || string->string.find(arg) != std::string::npos);
 		}}},
 		{"indexOf", {[](Context &context, auto &args, Reference *this_obj) {
-			auto *string = this_obj->ultimateValue()->cast<String>();
-			assert(string != nullptr);
-
-			const auto arg = args.empty()? "undefined" : static_cast<std::string>(*args.front());
-			size_t start = 0;
-			if (1 < args.size()) {
-				const auto number = static_cast<double>(*args[1]);
-				if (std::isinf(number))
-					return context.toValue(-1.);
-				if (!std::isnan(number))
-					start = static_cast<size_t>(number);
-			}
-
-			const size_t position = string->string.find(arg, start);
-			return context.toValue(position == std::string::npos? -1. : static_cast<double>(position));
+			return doIndexOf(context, args, this_obj, &std::string::find);
 		}}},
+		UNIMPLEMENTED(isWellFormed)
+		{"lastIndexOf", {[](Context &context, auto &args, Reference *this_obj) {
+			return doIndexOf(context, args, this_obj, &std::string::rfind);
+		}}},
+		UNIMPLEMENTED(localeCompare)
+		UNIMPLEMENTED(match)
+		UNIMPLEMENTED(matchAll)
+		// {"padEnd", {[](Context &context, auto &args, Reference *this_obj) {
+
+		// }}},
+
 	});
 
 	(*string)["fromCharCode"] = makeReference<Function>([](Context &context, const auto &args, auto) {

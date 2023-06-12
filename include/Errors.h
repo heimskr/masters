@@ -50,3 +50,7 @@ struct TypeError: JSError {
 struct SyntaxError: JSError {
 	using JSError::JSError;
 };
+
+struct RangeError: JSError {
+	using JSError::JSError;
+};
