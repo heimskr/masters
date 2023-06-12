@@ -13,24 +13,6 @@
 #include "Parser.h"
 #include "Value.h"
 
-std::unordered_set<BinaryExpression::Type> BinaryExpression::assignmentTypes {
-	BinaryExpression::Type::Assignment,
-	BinaryExpression::Type::AdditionAssignment,
-	BinaryExpression::Type::SubtractionAssignment,
-	BinaryExpression::Type::MultiplicationAssignment,
-	BinaryExpression::Type::ExponentiationAssignment,
-	BinaryExpression::Type::DivisionAssignment,
-	BinaryExpression::Type::ModuloAssignment,
-	BinaryExpression::Type::LeftShiftAssignment,
-	BinaryExpression::Type::RightShiftArithmeticAssignment,
-	BinaryExpression::Type::RightShiftLogicalAssignment,
-	BinaryExpression::Type::BitwiseAndAssignment,
-	BinaryExpression::Type::BitwiseOrAssignment,
-	BinaryExpression::Type::LogicalOrAssignment,
-	BinaryExpression::Type::LogicalAndAssignment,
-	BinaryExpression::Type::BitwiseXorAssignment,
-};
-
 DeclarationKind getKind(int symbol) {
 	switch (symbol) {
 		case JSTOK_CONST: return DeclarationKind::Const;
@@ -56,9 +38,12 @@ const char * stringify(NodeType type) {
 	}
 }
 
-//
-// Node
-//
+//   _   _           _
+//  | \ | |         | |
+//  |  \| | ___   __| | ___
+//  | . ` |/ _ \ / _` |/ _ \
+//  | |\  | (_) | (_| |  __/
+//  |_| \_|\___/ \__,_|\___|
 
 void Node::assertType(NodeType type) {
 	if (getType() != type)
@@ -74,9 +59,14 @@ void Node::absorbPosition(const ASTNode &node) {
 	location = node.location;
 }
 
-//
-// Program
-//
+//   _____
+//  |  __ \
+//  | |__) | __ ___   __ _ _ __ __ _ _ __ ___
+//  |  ___/ '__/ _ \ / _` | '__/ _` | '_ ` _ \
+//  | |   | | | (_) | (_| | | | (_| | | | | | |
+//  |_|   |_|  \___/ \__, |_|  \__,_|_| |_| |_|
+//                    __/ |
+//                   |___/
 
 Program::Program(const ASTNode &node) {
 	absorbPosition(node);
@@ -105,9 +95,12 @@ std::pair<Result, Value *> Program::interpret(Context &context) {
 	return {Result::None, nullptr};
 }
 
-//
-// Block
-//
+//   ____  _            _
+//  |  _ \| |          | |
+//  | |_) | | ___   ___| | __
+//  |  _ <| |/ _ \ / __| |/ /
+//  | |_) | | (_) | (__|   <
+//  |____/|_|\___/ \___|_|\_\.
 
 Block::Block(const ASTNode &node) {
 	absorbPosition(node);
@@ -136,9 +129,12 @@ void Block::findVariables(std::vector<VariableUsage> &usages) const {
 		node->findVariables(usages);
 }
 
-//
-// VariableDefinition
-//
+//  __      __        _       _     _      _____        __ _       _ _   _
+//  \ \    / /       (_)     | |   | |    |  __ \      / _(_)     (_) | (_)
+//   \ \  / /_ _ _ __ _  __ _| |__ | | ___| |  | | ___| |_ _ _ __  _| |_ _  ___  _ __
+//    \ \/ / _` | '__| |/ _` | '_ \| |/ _ \ |  | |/ _ \  _| | '_ \| | __| |/ _ \| '_ \
+//     \  / (_| | |  | | (_| | |_) | |  __/ |__| |  __/ | | | | | | | |_| | (_) | | | |
+//      \/ \__,_|_|  |_|\__,_|_.__/|_|\___|_____/ \___|_| |_|_| |_|_|\__|_|\___/|_| |_|
 
 VariableDefinition::VariableDefinition(const ASTNode &node):
 	ident(*node.text),
@@ -152,9 +148,12 @@ void VariableDefinition::findVariables(std::vector<VariableUsage> &usages) const
 	usages.emplace_back(true, ident);
 }
 
-//
-// VariableDefinitions
-//
+//  __      __        _       _     _      _____        __ _       _ _   _
+//  \ \    / /       (_)     | |   | |    |  __ \      / _(_)     (_) | (_)
+//   \ \  / /_ _ _ __ _  __ _| |__ | | ___| |  | | ___| |_ _ _ __  _| |_ _  ___  _ __  ___
+//    \ \/ / _` | '__| |/ _` | '_ \| |/ _ \ |  | |/ _ \  _| | '_ \| | __| |/ _ \| '_ \/ __|
+//     \  / (_| | |  | | (_| | |_) | |  __/ |__| |  __/ | | | | | | | |_| | (_) | | | \__ \
+//      \/ \__,_|_|  |_|\__,_|_.__/|_|\___|_____/ \___|_| |_|_| |_|_|\__|_|\___/|_| |_|___/
 
 VariableDefinitions::VariableDefinitions(const ASTNode &node): kind(getKind(node.at(0)->symbol)) {
 	absorbPosition(node);
@@ -193,9 +192,12 @@ void VariableDefinitions::validateInSingleStatementContext() const {
 		throw SyntaxError("Lexical declaration cannot appear in a single-statement context");
 }
 
-//
-// IfStatement
-//
+//   _____  __ _____ _        _                            _
+//  |_   _|/ _/ ____| |      | |                          | |
+//    | | | || (___ | |_ __ _| |_ ___ _ __ ___   ___ _ __ | |_
+//    | | |  _\___ \| __/ _` | __/ _ \ '_ ` _ \ / _ \ '_ \| __|
+//   _| |_| | ____) | || (_| | ||  __/ | | | | |  __/ | | | |_
+//  |_____|_||_____/ \__\__,_|\__\___|_| |_| |_|\___|_| |_|\__|
 
 IfStatement::IfStatement(const ASTNode &node):
 	condition(Expression::create(*node.at(0))),
@@ -215,9 +217,14 @@ void IfStatement::findVariables(std::vector<VariableUsage> &usages) const {
 	condition->findVariables(usages);
 }
 
-//
-// WhileLoop
-//
+//  __          ___     _ _      _
+//  \ \        / / |   (_) |    | |
+//   \ \  /\  / /| |__  _| | ___| |     ___   ___  _ __
+//    \ \/  \/ / | '_ \| | |/ _ \ |    / _ \ / _ \| '_ \
+//     \  /\  /  | | | | | |  __/ |___| (_) | (_) | |_) |
+//      \/  \/   |_| |_|_|_|\___|______\___/ \___/| .__/
+//                                                | |
+//                                                |_|
 
 WhileLoop::WhileLoop(const ASTNode &node):
 	condition(Expression::create(*node.at(0))),
@@ -245,9 +252,14 @@ void WhileLoop::findVariables(std::vector<VariableUsage> &usages) const {
 	condition->findVariables(usages);
 }
 
-//
-// ForLoop
-//
+//   ______         _
+//  |  ____|       | |
+//  | |__ ___  _ __| |     ___   ___  _ __
+//  |  __/ _ \| '__| |    / _ \ / _ \| '_ \
+//  | | | (_) | |  | |___| (_) | (_) | |_) |
+//  |_|  \___/|_|  |______\___/ \___/| .__/
+//                                   | |
+//                                   |_|
 
 ForLoop::ForLoop(const ASTNode &node):
 	setup(Statement::create(*node.at(0))),
@@ -286,25 +298,35 @@ void ForLoop::findVariables(std::vector<VariableUsage> &usages) const {
 	condition->findVariables(usages);
 }
 
-//
-// Continue
-//
+//    _____            _   _
+//   / ____|          | | (_)
+//  | |     ___  _ __ | |_ _ _ __  _   _  ___
+//  | |    / _ \| '_ \| __| | '_ \| | | |/ _ \
+//  | |___| (_) | | | | |_| | | | | |_| |  __/
+//   \_____\___/|_| |_|\__|_|_| |_|\__,_|\___|
 
 std::pair<Result, Value *> Continue::interpret(Context &) {
 	return {Result::Continue, nullptr};
 }
 
-//
-// Break
-//
+//   ____                 _
+//  |  _ \               | |
+//  | |_) |_ __ ___  __ _| | __
+//  |  _ <| '__/ _ \/ _` | |/ /
+//  | |_) | | |  __/ (_| |   <
+//  |____/|_|  \___|\__,_|_|\_\.
+
 
 std::pair<Result, Value *> Break::interpret(Context &) {
 	return {Result::Break, nullptr};
 }
 
-//
-// Return
-//
+//   _____      _
+//  |  __ \    | |
+//  | |__) |___| |_ _   _ _ __ _ __
+//  |  _  // _ \ __| | | | '__| '_ \
+//  | | \ \  __/ |_| |_| | |  | | | |
+//  |_|  \_\___|\__|\__,_|_|  |_| |_|
 
 Return::Return(const ASTNode &node):
 	returnValue(node.empty()? nullptr : Expression::create(*node.front())) { absorbPosition(node); }
@@ -320,22 +342,37 @@ void Return::findVariables(std::vector<VariableUsage> &usages) const {
 		returnValue->findVariables(usages);
 }
 
-//
-// Expression
-//
-
-std::pair<Result, Value *> Expression::interpret(Context &context) {
-	return {Result::None, evaluate(context)};
-}
-
-//
-// BinaryExpression
-//
+//   ____  _                        ______                              _
+//  |  _ \(_)                      |  ____|                            (_)
+//  | |_) |_ _ __   __ _ _ __ _   _| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//  |  _ <| | '_ \ / _` | '__| | | |  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//  | |_) | | | | | (_| | |  | |_| | |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//  |____/|_|_| |_|\__,_|_|   \__, |______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//                             __/ |           | |
+//                            |___/            |_|
 
 BinaryExpression::BinaryExpression(const ASTNode &node):
 	type(getType(node.symbol)),
 	left(Expression::create(*node.at(0))),
 	right(Expression::create(*node.at(1))) { absorbPosition(node); }
+
+std::unordered_set<BinaryExpression::Type> BinaryExpression::assignmentTypes {
+	BinaryExpression::Type::Assignment,
+	BinaryExpression::Type::AdditionAssignment,
+	BinaryExpression::Type::SubtractionAssignment,
+	BinaryExpression::Type::MultiplicationAssignment,
+	BinaryExpression::Type::ExponentiationAssignment,
+	BinaryExpression::Type::DivisionAssignment,
+	BinaryExpression::Type::ModuloAssignment,
+	BinaryExpression::Type::LeftShiftAssignment,
+	BinaryExpression::Type::RightShiftArithmeticAssignment,
+	BinaryExpression::Type::RightShiftLogicalAssignment,
+	BinaryExpression::Type::BitwiseAndAssignment,
+	BinaryExpression::Type::BitwiseOrAssignment,
+	BinaryExpression::Type::LogicalOrAssignment,
+	BinaryExpression::Type::LogicalAndAssignment,
+	BinaryExpression::Type::BitwiseXorAssignment,
+};
 
 Value * BinaryExpression::evaluate(Context &context) {
 	switch (type) {
@@ -500,9 +537,14 @@ void BinaryExpression::findVariables(std::vector<VariableUsage> &usages) const {
 	right->findVariables(usages);
 }
 
-//
-// UnaryExpression
-//
+//   _    _                        ______                              _
+//  | |  | |                      |  ____|                            (_)
+//  | |  | |_ __   __ _ _ __ _   _| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//  | |  | | '_ \ / _` | '__| | | |  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//  | |__| | | | | (_| | |  | |_| | |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//   \____/|_| |_|\__,_|_|   \__, |______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//                            __/ |           | |
+//                           |___/            |_|
 
 UnaryExpression::UnaryExpression(const ASTNode &node):
 	type(getType(node.symbol)),
@@ -572,9 +614,18 @@ void UnaryExpression::findVariables(std::vector<VariableUsage> &usages) const {
 	subexpr->findVariables(usages);
 }
 
-//
-// Expression
-//
+//   ______                              _
+//  |  ____|                            (_)
+//  | |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//  |  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//  | |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//  |______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//              | |
+//              |_|
+
+std::pair<Result, Value *> Expression::interpret(Context &context) {
+	return {Result::None, evaluate(context)};
+}
 
 std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 	std::unique_ptr<Expression> out;
@@ -668,9 +719,12 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 	return out;
 }
 
-//
-// Statement
-//
+//    _____ _        _                            _
+//   / ____| |      | |                          | |
+//  | (___ | |_ __ _| |_ ___ _ __ ___   ___ _ __ | |_
+//   \___ \| __/ _` | __/ _ \ '_ ` _ \ / _ \ '_ \| __|
+//   ____) | || (_| | ||  __/ | | | | |  __/ | | | |_
+//  |_____/ \__\__,_|\__\___|_| |_| |_|\___|_| |_|\__|
 
 std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 	std::unique_ptr<Statement> out;
@@ -716,9 +770,12 @@ std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 	return out;
 }
 
-//
-// Identifier
-//
+//   _____    _            _   _  __ _
+//  |_   _|  | |          | | (_)/ _(_)
+//    | |  __| | ___ _ __ | |_ _| |_ _  ___ _ __
+//    | | / _` |/ _ \ '_ \| __| |  _| |/ _ \ '__|
+//   _| || (_| |  __/ | | | |_| | | | |  __/ |
+//  |_____\__,_|\___|_| |_|\__|_|_| |_|\___|_|
 
 Identifier::Identifier(const ASTNode &node): name(*node.text) {
 	absorbPosition(node);
@@ -735,9 +792,12 @@ void Identifier::findVariables(std::vector<VariableUsage> &usages) const {
 	usages.emplace_back(false, name);
 }
 
-//
-// NumberLiteral
-//
+//   _   _                 _               _      _ _                 _
+//  | \ | |               | |             | |    (_) |               | |
+//  |  \| |_   _ _ __ ___ | |__   ___ _ __| |     _| |_ ___ _ __ __ _| |
+//  | . ` | | | | '_ ` _ \| '_ \ / _ \ '__| |    | | __/ _ \ '__/ _` | |
+//  | |\  | |_| | | | | | | |_) |  __/ |  | |____| | ||  __/ | | (_| | |
+//  |_| \_|\__,_|_| |_| |_|_.__/ \___|_|  |______|_|\__\___|_|  \__,_|_|
 
 NumberLiteral::NumberLiteral(const ASTNode &node): value(parseDouble(*node.text)) {
 	absorbPosition(node);
@@ -747,9 +807,14 @@ Value * NumberLiteral::evaluate(Context &context) {
 	return context.makeValue<Number>(value);
 }
 
-//
-// StringLiteral
-//
+//    _____ _        _             _      _ _                 _
+//   / ____| |      (_)           | |    (_) |               | |
+//  | (___ | |_ _ __ _ _ __   __ _| |     _| |_ ___ _ __ __ _| |
+//   \___ \| __| '__| | '_ \ / _` | |    | | __/ _ \ '__/ _` | |
+//   ____) | |_| |  | | | | | (_| | |____| | ||  __/ | | (_| | |
+//  |_____/ \__|_|  |_|_| |_|\__, |______|_|\__\___|_|  \__,_|_|
+//                            __/ |
+//                           |___/
 
 StringLiteral::StringLiteral(const ASTNode &node): value(node.unquote()) {
 	absorbPosition(node);
@@ -759,9 +824,12 @@ Value * StringLiteral::evaluate(Context &context) {
 	return context.makeValue<String>(value);
 }
 
-//
-// UndefinedLiteral
-//
+//   _    _           _       __ _                _ _      _ _                 _
+//  | |  | |         | |     / _(_)              | | |    (_) |               | |
+//  | |  | |_ __   __| | ___| |_ _ _ __   ___  __| | |     _| |_ ___ _ __ __ _| |
+//  | |  | | '_ \ / _` |/ _ \  _| | '_ \ / _ \/ _` | |    | | __/ _ \ '__/ _` | |
+//  | |__| | | | | (_| |  __/ | | | | | |  __/ (_| | |____| | ||  __/ | | (_| | |
+//   \____/|_| |_|\__,_|\___|_| |_|_| |_|\___|\__,_|______|_|\__\___|_|  \__,_|_|
 
 UndefinedLiteral::UndefinedLiteral(const ASTNode &node) {
 	absorbPosition(node);
@@ -771,9 +839,12 @@ Value * UndefinedLiteral::evaluate(Context &context) {
 	return context.makeValue<Undefined>();
 }
 
-//
-// NullLiteral
-//
+//   _   _       _ _ _      _ _                 _
+//  | \ | |     | | | |    (_) |               | |
+//  |  \| |_   _| | | |     _| |_ ___ _ __ __ _| |
+//  | . ` | | | | | | |    | | __/ _ \ '__/ _` | |
+//  | |\  | |_| | | | |____| | ||  __/ | | (_| | |
+//  |_| \_|\__,_|_|_|______|_|\__\___|_|  \__,_|_|
 
 NullLiteral::NullLiteral(const ASTNode &node) {
 	absorbPosition(node);
@@ -783,9 +854,12 @@ Value * NullLiteral::evaluate(Context &context) {
 	return context.makeValue<Null>();
 }
 
-//
-// BooleanLiteral
-//
+//   ____              _                  _      _ _                 _
+//  |  _ \            | |                | |    (_) |               | |
+//  | |_) | ___   ___ | | ___  __ _ _ __ | |     _| |_ ___ _ __ __ _| |
+//  |  _ < / _ \ / _ \| |/ _ \/ _` | '_ \| |    | | __/ _ \ '__/ _` | |
+//  | |_) | (_) | (_) | |  __/ (_| | | | | |____| | ||  __/ | | (_| | |
+//  |____/ \___/ \___/|_|\___|\__,_|_| |_|______|_|\__\___|_|  \__,_|_|
 
 BooleanLiteral::BooleanLiteral(const ASTNode &node): value(node.symbol == JSTOK_TRUE) {
 	absorbPosition(node);
@@ -795,9 +869,12 @@ Value * BooleanLiteral::evaluate(Context &context) {
 	return context.makeValue<Boolean>(value);
 }
 
-//
-// FunctionCall
-//
+//   ______                _   _              _____      _ _
+//  |  ____|              | | (_)            / ____|    | | |
+//  | |__ _   _ _ __   ___| |_ _  ___  _ __ | |     __ _| | |
+//  |  __| | | | '_ \ / __| __| |/ _ \| '_ \| |    / _` | | |
+//  | |  | |_| | | | | (__| |_| | (_) | | | | |___| (_| | | |
+//  |_|   \__,_|_| |_|\___|\__|_|\___/|_| |_|\_____\__,_|_|_|
 
 FunctionCall::FunctionCall(const ASTNode &node): function(Expression::create(*node.front())) {
 	for (const auto *subnode: *node.at(1))
@@ -840,9 +917,14 @@ void FunctionCall::findVariables(std::vector<VariableUsage> &usages) const {
 		argument->findVariables(usages);
 }
 
-//
-// FunctionExpression
-//
+//   ______                _   _             ______                              _
+//  |  ____|              | | (_)           |  ____|                            (_)
+//  | |__ _   _ _ __   ___| |_ _  ___  _ __ | |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//  |  __| | | | '_ \ / __| __| |/ _ \| '_ \|  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//  | |  | |_| | | | | (__| |_| | (_) | | | | |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//  |_|   \__,_|_| |_|\___|\__|_|\___/|_| |_|______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//                                                      | |
+//                                                      |_|
 
 FunctionExpression::FunctionExpression(const ASTNode &node):
 name(2 < node.size()? *node.at(2)->text : ""),
@@ -926,9 +1008,14 @@ Closure FunctionExpression::assembleClosure(Context &context) const {
 	return {std::move(closure), std::move(closureMap)};
 }
 
-//
-// ObjectExpression
-//
+//    ____  _     _           _   ______                              _
+//   / __ \| |   (_)         | | |  ____|                            (_)
+//  | |  | | |__  _  ___  ___| |_| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//  | |  | | '_ \| |/ _ \/ __| __|  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//  | |__| | |_) | |  __/ (__| |_| |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//   \____/|_.__/| |\___|\___|\__|______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//              _/ |                         | |
+//             |__/                          |_|
 
 ObjectExpression::ObjectExpression(const ASTNode &node) {
 	if (!node.empty())
@@ -950,9 +1037,14 @@ void ObjectExpression::findVariables(std::vector<VariableUsage> &usages) const {
 		expression->findVariables(usages);
 }
 
-//
-// ArrayExpression
-//
+//                                 ______                              _
+//      /\                        |  ____|                            (_)
+//     /  \   _ __ _ __ __ _ _   _| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//    / /\ \ | '__| '__/ _` | | | |  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//   / ____ \| |  | | | (_| | |_| | |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//  /_/    \_\_|  |_|  \__,_|\__, |______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//                            __/ |           | |
+//                           |___/            |_|
 
 ArrayExpression::ArrayExpression(const ASTNode &node) {
 	if (!node.empty()) {
@@ -993,9 +1085,14 @@ void ArrayExpression::findVariables(std::vector<VariableUsage> &usages) const {
 			expression->findVariables(usages);
 }
 
-//
-// ObjectAccessor
-//
+//    ____  _     _           _
+//   / __ \| |   (_)         | |     /\
+//  | |  | | |__  _  ___  ___| |_   /  \   ___ ___ ___  ___ ___  ___  _ __
+//  | |  | | '_ \| |/ _ \/ __| __| / /\ \ / __/ __/ _ \/ __/ __|/ _ \| '__|
+//  | |__| | |_) | |  __/ (__| |_ / ____ \ (_| (_|  __/\__ \__ \ (_) | |
+//   \____/|_.__/| |\___|\___|\__/_/    \_\___\___\___||___/___/\___/|_|
+//              _/ |
+//             |__/
 
 Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &property) {
 	assert(lhs != nullptr);
@@ -1016,9 +1113,14 @@ Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &
 	return undefined;
 }
 
-//
-// DotExpression
-//
+//   _____        _   ______                              _
+//  |  __ \      | | |  ____|                            (_)
+//  | |  | | ___ | |_| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//  | |  | |/ _ \| __|  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//  | |__| | (_) | |_| |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//  |_____/ \___/ \__|______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//                               | |
+//                               |_|
 
 DotExpression::DotExpression(const ASTNode &node):
 	base(Expression::create(*node.at(0))),
@@ -1047,9 +1149,14 @@ void DotExpression::findVariables(std::vector<VariableUsage> &usages) const {
 }
 
 
-//
-// AccessExpression
-//
+//                                 ______                              _
+//      /\                        |  ____|                            (_)
+//     /  \   ___ ___ ___  ___ ___| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//    / /\ \ / __/ __/ _ \/ __/ __|  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \
+//   / ____ \ (_| (_|  __/\__ \__ \ |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//  /_/    \_\___\___\___||___/___/______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//                                            | |
+//                                            |_|
 
 AccessExpression::AccessExpression(const ASTNode &node):
 	base(Expression::create(*node.at(0))),
