@@ -160,13 +160,39 @@ void Context::addDefaults() {
 		{"charCodeAt", {[](Context &, auto &, Reference *) -> Value * {
 			throw Unimplemented();
 		}}},
-		{"concat", {[](Context &context, auto &args, Reference *this_obj) -> Value * {
+		{"concat", {[](Context &context, auto &args, Reference *this_obj) {
 			auto *string = this_obj->ultimateValue()->cast<String>();
 			assert(string != nullptr);
 			std::string out = string->string;
 			for (const Value *arg: args)
 				out += static_cast<std::string>(*arg);
 			return context.toValue(out);
+		}}},
+		{"endsWith", {[](Context &context, auto &args, Reference *this_obj) {
+			auto *string = this_obj->ultimateValue()->cast<String>();
+			assert(string != nullptr);
+
+			std::string search_string;
+			size_t expected = string->string.size();
+
+			if (!args.empty()) {
+				search_string = static_cast<std::string>(*args.front());
+				if (2 <= args.size()) {
+					if (auto number = static_cast<double>(*args[1]); isFinite(number))
+						expected = static_cast<size_t>(number);
+					else
+						expected = 0;
+				}
+			} else
+				search_string = "undefined"; // certified JavaScript moment
+
+			const size_t search_position = std::min(expected, string->string.size()) - search_string.size();
+
+			try {
+				return context.toValue(string->string.substr(search_position, search_string.size()) == search_string);
+			} catch (const std::out_of_range &) {
+				return context.toValue(false);
+			}
 		}}},
 	});
 }
