@@ -91,6 +91,22 @@ static String * doSubstring(Context &context, const std::vector<Value *> &args, 
 	return context.toValue(string->string.substr(start, count));
 }
 
+
+static String * doCharAt(Context &context, const std::vector<Value *> &args, Reference *this_obj) {
+	auto *string = this_obj->ultimateValue()->cast<String>();
+	assert(string != nullptr);
+
+	size_t index = 0;
+	if (!args.empty())
+		if (const auto number = static_cast<double>(*args.front()); isFinite(number))
+			index = static_cast<size_t>(number);
+
+	if (index < string->string.size())
+		return context.toValue(std::string(1, string->string.at(index)));
+
+	return context.toValue("");
+}
+
 void Context::addDefaults() {
 	makeGlobal<Object>("this");
 
@@ -139,18 +155,18 @@ void Context::addDefaults() {
 			return doSubstring(context, args, this_obj, false);
 		}}},
 		{"charAt", {[](Context &context, auto &args, Reference *this_obj) {
+			return doCharAt(context, args, this_obj);
+		}}},
+		{"charCodeAt", {[](Context &, auto &, Reference *) -> Value * {
+			throw Unimplemented();
+		}}},
+		{"concat", {[](Context &context, auto &args, Reference *this_obj) -> Value * {
 			auto *string = this_obj->ultimateValue()->cast<String>();
 			assert(string != nullptr);
-
-			size_t index = 0;
-			if (!args.empty())
-				if (const auto number = static_cast<double>(*args.front()); isFinite(number))
-					index = static_cast<size_t>(number);
-
-			if (index < string->string.size())
-				return context.toValue(std::string(1, string->string.at(index)));
-
-			return context.toValue("");
+			std::string out = string->string;
+			for (const Value *arg: args)
+				out += static_cast<std::string>(*arg);
+			return context.toValue(out);
 		}}},
 	});
 }

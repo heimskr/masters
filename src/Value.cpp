@@ -342,7 +342,7 @@ Value * Value::operator||(const Value &other) const {
 }
 
 Value * Value::operator!=(const Value &other) const {
-	return make<Boolean>(!(*this == other));
+	return make<Boolean>(!(*this == other)->cast<Boolean>()->boolean);
 }
 
 Value * Value::operator<(const Value &other) const {
