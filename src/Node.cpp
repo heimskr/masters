@@ -236,7 +236,7 @@ std::pair<Result, Value *> WhileLoop::interpret(Context &context) {
 	// Pushing/popping the scope stack isn't necessary because there's no need for it in a non-block statement
 	// (let/const is invalid in a single-statement context) and a block does it itself.
 
-	while (condition->evaluate(context)) {
+	while (*condition->evaluate(context)) {
 		const auto [result, value] = body->interpret(context);
 		if (result == Result::Break)
 			return {Result::None, value};
@@ -276,7 +276,7 @@ std::pair<Result, Value *> ForLoop::interpret(Context &context) {
 	context.stack.push();
 	setup->interpret(context);
 
-	while (condition->evaluate(context)) {
+	while (*condition->evaluate(context)) {
 		const auto [result, value] = body->interpret(context);
 
 		if (result == Result::Break)
