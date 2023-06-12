@@ -162,7 +162,8 @@ int64_t ASTNode::atoi(int offset) const {
 }
 
 std::string ASTNode::unquote(bool unescape) const {
-	if (text->size() < 2 || text->front() != '"' || text->back() != '"')
+	if (text->size() < 2 || !((text->front() == '"'  && text->back() == '"') ||
+	                          (text->front() == '\'' && text->back() == '\'')))
 		throw GenericError(location, "Not a quoted string: " + *text);
 	const std::string out = text->substr(1, text->size() - 2);
 	return unescape? unescapeString(out) : out;

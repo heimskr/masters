@@ -13,4 +13,5 @@ print(str.charAt(NaN) === "f");
 print(str.charAt(Infinity) === "f");
 print(str.charAt(-Infinity) === "f");
 print(str.concat(" ", "quux", "!") === "foobar quux!");
-print(str.concat(" ", "quux", "!") !== "foobar");
+print(str.concat(" ", 'quux', "!") !== "foobar");
+print(!(0 !== 0));
