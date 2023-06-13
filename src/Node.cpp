@@ -568,6 +568,10 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 			out = std::make_unique<AccessExpression>(node);
 			break;
 
+		case JSTOK_NEW:
+			out = std::make_unique<NewExpression>(node);
+			break;
+
 		default:
 			node.debug();
 			throw std::invalid_argument("Unhandled symbol in Expression::create: " + std::string(node.getName()));
@@ -645,8 +649,6 @@ Value * FunctionCall::evaluate(Context &context) {
 		throw TypeError("Value " + static_cast<std::string>(*evaluated_function) + " is not a function");
 
 	auto &cast_function = dynamic_cast<Function &>(*evaluated_function->ultimateValue());
-	// FieldSaver saved_function(context, &Context::currentFunction);
-	// context.currentFunction = &cast_function;
 
 	std::vector<Value *> argument_values;
 	argument_values.reserve(arguments.size());
@@ -676,7 +678,9 @@ Value * FunctionCaller::call(Function *function, Context &context, const std::ve
 	context.currentFunction = function;
 
 	ClosureGuard guard(context, function->closure);
-	return function->function(context, arguments, this_obj == nullptr? function->thisObj : this_obj);
+	if (Value *out = function->function(context, arguments, this_obj == nullptr? function->thisObj : this_obj))
+		return out;
+	return context.makeValue<Undefined>();
 }
 
 //   ______                _   _             ______                              _
@@ -816,6 +820,45 @@ std::pair<Result, Value *> IfStatement::interpret(Context &context) {
 void IfStatement::findVariables(std::vector<VariableUsage> &usages) const {
 	assert(condition);
 	condition->findVariables(usages);
+}
+
+//   _   _               ______                              _
+//  | \ | |             |  ____|                            (_)
+//  |  \| | _____      _| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//  | . ` |/ _ \ \ /\ / /  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \.
+//  | |\  |  __/\ V  V /| |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//  |_| \_|\___| \_/\_/ |______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//                                  | |
+//                                  |_|
+
+
+NewExpression::NewExpression(const ASTNode &node): classExpression(Expression::create(*node.front())) {
+	for (const auto *subnode: *node.at(1))
+		arguments.emplace_back(Expression::create(*subnode));
+}
+
+Value * NewExpression::evaluate(Context &context) {
+	Function *constructor = classExpression->evaluate(context)->ultimateValue()->cast<Function>();
+	assert(constructor != nullptr);
+
+	Object *object = context.makeValue<Object>();
+	object->customPrototype = constructor->getPrototype(context);
+
+	std::vector<Value *> argument_values;
+	argument_values.reserve(arguments.size());
+
+	for (const auto &argument: arguments)
+		argument_values.emplace_back(argument->evaluate(context));
+
+	constructor->function(context, argument_values, context.makeReference(object));
+	return object;
+}
+
+void NewExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	if (classExpression)
+		classExpression->findVariables(usages);
+	for (const auto &argument: arguments)
+		argument->findVariables(usages);
 }
 
 //   _   _           _

@@ -26,7 +26,7 @@ enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
 	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return, ObjectExpression,
 	DotExpression, NumberLiteral, StringLiteral, BooleanLiteral, ArrayExpression, AccessExpression, UndefinedLiteral,
-	NullLiteral, ForLoop,
+	NullLiteral, ForLoop, NewExpression,
 };
 
 struct VariableUsage {
@@ -173,6 +173,12 @@ class NewExpression: public Expression {
 	public:
 		std::unique_ptr<Expression> classExpression;
 		std::vector<std::unique_ptr<Expression>> arguments;
+
+		NewExpression(const ASTNode &);
+
+		NodeType getType() const override { return NodeType::NewExpression; }
+		Value * evaluate(Context &) override;
+		void findVariables(std::vector<VariableUsage> &) const override;
 };
 
 class Block: public Statement {
