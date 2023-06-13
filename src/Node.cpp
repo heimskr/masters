@@ -1202,27 +1202,35 @@ std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 		case JSTOK_VAR:
 			out = std::make_unique<VariableDefinitions>(node);
 			break;
+
 		case JSTOK_IF:
 			out = std::make_unique<IfStatement>(node);
 			break;
+
 		case JSTOK_WHILE:
 			out = std::make_unique<WhileLoop>(node);
 			break;
+
 		case JSTOK_FOR:
 			out = std::make_unique<ForLoop>(node);
 			break;
+
 		case JSTOK_CONTINUE:
 			out = std::make_unique<Continue>();
 			break;
+
 		case JSTOK_BREAK:
 			out = std::make_unique<Break>();
 			break;
+
 		case JSTOK_RETURN:
 			out = std::make_unique<Return>(node);
 			break;
+
 		case JS_BLOCK:
 			out = std::make_unique<Block>(node);
 			break;
+
 		case JSTOK_TEQ:
 		case JSTOK_NTEQ:
 		case JSTOK_LT:
@@ -1282,6 +1290,11 @@ std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 		case JSTOK_INSTANCEOF:
 			out = Expression::create(node);
 			break;
+
+		case JS_EMPTY:
+			out = std::make_unique<EmptyStatement>(node);
+			break;
+
 		default:
 			node.debug();
 			throw std::invalid_argument("Unhandled symbol in Statement::create: " + std::string(node.getName()));

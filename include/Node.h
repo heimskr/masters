@@ -26,7 +26,7 @@ enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
 	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return, ObjectExpression,
 	DotExpression, NumberLiteral, StringLiteral, BooleanLiteral, ArrayExpression, AccessExpression, UndefinedLiteral,
-	NullLiteral, ForLoop, NewExpression, DeleteExpression, Identifier,
+	NullLiteral, ForLoop, NewExpression, DeleteExpression, Identifier, EmptyStatement,
 };
 
 struct VariableUsage {
@@ -420,4 +420,13 @@ class AccessExpression: public Expression, public ObjectAccessor {
 		Value * evaluate(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override;
 		bool doDelete(Context &) override;
+};
+
+class EmptyStatement: public Statement {
+	public:
+		EmptyStatement(const ASTNode &node) { absorbPosition(node); }
+
+		NodeType getType() const override { return NodeType::EmptyStatement; }
+		std::pair<Result, Value *> interpret(Context &) override { return {Result::None, nullptr}; }
+		void findVariables(std::vector<VariableUsage> &) const override {}
 };
