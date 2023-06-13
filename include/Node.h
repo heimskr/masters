@@ -26,7 +26,7 @@ enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
 	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return, ObjectExpression,
 	DotExpression, NumberLiteral, StringLiteral, BooleanLiteral, ArrayExpression, AccessExpression, UndefinedLiteral,
-	NullLiteral, ForLoop, NewExpression,
+	NullLiteral, ForLoop, NewExpression, DeleteExpression,
 };
 
 struct VariableUsage {
@@ -99,6 +99,7 @@ class Expression: public Statement {
 		static std::unique_ptr<Expression> create(const ASTNode &);
 
 		std::pair<Result, Value *> interpret(Context &) override;
+		virtual bool doDelete(Context &) { return true; }
 
 	protected:
 		Expression() = default;
@@ -119,6 +120,7 @@ class Identifier: public LValueExpression {
 		Identifier(const ASTNode &);
 		Value * evaluate(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override;
+		bool doDelete(Context &) override;
 };
 
 class BinaryExpression: public Expression {
@@ -298,6 +300,15 @@ class Return: public Statement {
 		void findVariables(std::vector<VariableUsage> &) const override;
 };
 
+class DeleteExpression: public Expression {
+	public:
+		std::unique_ptr<Expression> toDelete;
+		DeleteExpression(const ASTNode &);
+		NodeType getType() const override { return NodeType::DeleteExpression; }
+		Value * evaluate(Context &) override;
+		void findVariables(std::vector<VariableUsage> &) const override;
+};
+
 class NumberLiteral: public Expression {
 	public:
 		double value;
@@ -380,7 +391,8 @@ class ArrayExpression: public Expression {
 };
 
 struct ObjectAccessor {
-	static Value * access(Context &context, Value *, const std::string &);
+	static Value * access(Context &, Value *, const std::string &);
+	static bool doDelete(Context &, Value *object, Value *property);
 };
 
 class DotExpression: public Expression, public ObjectAccessor {
@@ -393,6 +405,7 @@ class DotExpression: public Expression, public ObjectAccessor {
 		NodeType getType() const override { return NodeType::DotExpression; }
 		Value * evaluate(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override;
+		bool doDelete(Context &) override;
 };
 
 class AccessExpression: public Expression, public ObjectAccessor {
@@ -405,4 +418,5 @@ class AccessExpression: public Expression, public ObjectAccessor {
 		NodeType getType() const override { return NodeType::AccessExpression; }
 		Value * evaluate(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override;
+		bool doDelete(Context &) override;
 };

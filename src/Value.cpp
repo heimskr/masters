@@ -207,7 +207,7 @@ Reference * Array::access(const std::string &property, bool can_create) {
 Reference * Array::access(double number) {
 	double intpart = 0.;
 	if (isFinite(number) && std::modf(number, &intpart) == 0.) {
-		auto index = static_cast<size_t>(intpart);
+		const auto index = static_cast<size_t>(intpart);
 		if (isHoley()) {
 			const auto &holey = std::get<Holey>(values);
 			if (auto iter = holey.find(index); iter != holey.end())
@@ -220,6 +220,29 @@ Reference * Array::access(double number) {
 	}
 
 	return nullptr;
+}
+
+bool Array::doDelete(Value *property) {
+	const auto number = static_cast<double>(*property);
+	double intpart = 0.;
+	if (isFinite(number) && std::modf(number, &intpart) == 0.) {
+		const auto index = static_cast<size_t>(intpart);
+		if (isHoley()) {
+			auto &holey = std::get<Holey>(values);
+			if (auto iter = holey.find(index); iter != holey.end()) {
+				holey.erase(iter);
+				return true;
+			}
+		} else {
+			auto &holeless = std::get<Holeless>(values);
+			if (index < holeless.size()) {
+				holeless.at(index)->referent = context->makeValue<Undefined>();
+				return true;
+			}
+		}
+	}
+
+	return HasMap::doDelete(property);
 }
 
 size_t Array::size() const {
@@ -679,4 +702,17 @@ Reference * HasMap::access(const std::string &property, bool can_create) {
 		return map[property] = context->makeReference<Undefined>();
 
 	return nullptr;
+}
+
+bool HasMap::doDelete(Value *property) {
+	return doDelete(static_cast<std::string>(*property));
+}
+
+bool HasMap::doDelete(const std::string &property) {
+	if (auto iter = map.find(property); iter != map.end()) {
+		map.erase(iter);
+		return true;
+	}
+
+	return false;
 }

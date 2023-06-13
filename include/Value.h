@@ -54,6 +54,9 @@ class Value {
 		virtual Reference * access(Value *index, bool can_create);
 		virtual Reference * access(const std::string &property, bool can_create);
 
+		virtual bool doDelete(Value *) { return true; }
+		virtual bool doDelete(const std::string &) { return true; }
+
 		virtual explicit operator bool() const = 0;
 		virtual explicit operator std::string() const = 0;
 		virtual explicit operator double() const = 0;
@@ -144,6 +147,8 @@ class HasMap: public Value {
 		std::map<std::string, Reference *> map;
 		Reference * access(Value *index, bool can_create) override;
 		Reference * access(const std::string &property, bool can_create) override;
+		bool doDelete(Value *) override;
+		bool doDelete(const std::string &) override;
 
 	protected:
 		HasMap() = default;
@@ -180,6 +185,7 @@ class Array: public HasMap {
 		Reference * access(Value *index, bool can_create) override;
 		Reference * access(const std::string &property, bool can_create) override;
 		Reference * access(double);
+		bool doDelete(Value *) override;
 		size_t size() const;
 		bool empty() const;
 		VALUE_OPERATOR_OVERRIDES
@@ -288,6 +294,8 @@ class Reference: public Value {
 		std::string getName() const override { assertReferent(); return "Reference[" + referent->getName() + ']'; }
 		bool subscriptable() const override { assertReferent(); return referent->subscriptable(); }
 		Reference * access(Value *index, bool can_create) override { return referent->access(index, can_create); }
+		bool doDelete(Value *value) override { return referent->doDelete(value); }
+		bool doDelete(const std::string &property) override { return referent->doDelete(property); }
 
 		Reference * withContext(ReferenceContext) const;
 

@@ -119,6 +119,28 @@ void AccessExpression::findVariables(std::vector<VariableUsage> &usages) const {
 	subscript->findVariables(usages);
 }
 
+bool AccessExpression::doDelete(Context &context) {
+	Value *lhs = nullptr;
+	Value *rhs = nullptr;
+
+	{
+		auto saver = context.writeMember(false);
+		lhs = base->evaluate(context);
+		assert(lhs != nullptr);
+	}
+
+	if (!lhs->subscriptable())
+		throw TypeError("Can't use [] operator on non-object/array/string (" + lhs->getName() + ')', location);
+
+	{
+		auto saver = context.writeMember(false);
+		rhs = subscript->evaluate(context);
+		assert(rhs != nullptr);
+	}
+
+	return lhs->doDelete(rhs);
+}
+
 //                                 ______                              _
 //      /\                        |  ____|                            (_)
 //     /  \   _ __ _ __ __ _ _   _| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
@@ -434,6 +456,26 @@ std::pair<Result, Value *> Continue::interpret(Context &) {
 	return {Result::Continue, nullptr};
 }
 
+//   _____       _      _       ______                              _
+//  |  __ \     | |    | |     |  ____|                            (_)
+//  | |  | | ___| | ___| |_ ___| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
+//  | |  | |/ _ \ |/ _ \ __/ _ \  __| \ \/ / '_ \| '__/ _ \/ __/ __| |/ _ \| '_ \.
+//  | |__| |  __/ |  __/ ||  __/ |____ >  <| |_) | | |  __/\__ \__ \ | (_) | | | |
+//  |_____/ \___|_|\___|\__\___|______/_/\_\ .__/|_|  \___||___/___/_|\___/|_| |_|
+//                                         | |
+//                                         |_|
+
+DeleteExpression::DeleteExpression(const ASTNode &node):
+	toDelete(Expression::create(*node.front())) { absorbPosition(node); }
+
+Value * DeleteExpression::evaluate(Context &context) {
+	return context.toValue(toDelete->doDelete(context));
+}
+
+void DeleteExpression::findVariables(std::vector<VariableUsage> &usages) const {
+	toDelete->findVariables(usages);
+}
+
 //   _____        _   ______                              _
 //  |  __ \      | | |  ____|                            (_)
 //  | |  | | ___ | |_| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
@@ -455,18 +497,27 @@ Value * DotExpression::evaluate(Context &context) {
 		lhs = base->evaluate(context);
 	}
 
-	// TODO: update when boxing support is added
-	// if (lhs->ultimateType() != ValueType::Object) {
-	// 	WARN("LHS type: " << lhs->getName());
-	// 	throw TypeError("Can't use . operator on non-object " + lhs->getName(), location);
-	// }
-
 	return access(context, lhs->ultimateValue(), ident);
 }
 
 void DotExpression::findVariables(std::vector<VariableUsage> &usages) const {
 	assert(base != nullptr);
 	base->findVariables(usages);
+}
+
+bool DotExpression::doDelete(Context &context) {
+	Value *lhs = nullptr;
+
+	{
+		auto saver = context.writeMember(false);
+		lhs = base->evaluate(context);
+		assert(lhs != nullptr);
+	}
+
+	if (!lhs->subscriptable())
+		throw TypeError("Can't use [] operator on non-object/array/string (" + lhs->getName() + ')', location);
+
+	return lhs->doDelete(ident);
 }
 
 //   ______                              _
@@ -570,6 +621,10 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 
 		case JSTOK_NEW:
 			out = std::make_unique<NewExpression>(node);
+			break;
+
+		case JSTOK_DELETE:
+			out = std::make_unique<DeleteExpression>(node);
 			break;
 
 		default:
@@ -797,6 +852,11 @@ void Identifier::findVariables(std::vector<VariableUsage> &usages) const {
 	usages.emplace_back(false, name);
 }
 
+bool Identifier::doDelete(Context &) {
+	// TODO!: delete global variables, throw an error if deleting let/const'd variable
+	return true;
+}
+
 //   _____  __ _____ _        _                            _
 //  |_   _|/ _/ ____| |      | |                          | |
 //    | | | || (___ | |_ __ _| |_ ___ _ __ ___   ___ _ __ | |_
@@ -955,6 +1015,15 @@ Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &
 	return context.makeValue<Reference>(context.makeValue<Undefined>(), false);
 }
 
+bool ObjectAccessor::doDelete(Context &, Value *object, Value *property) {
+	assert(object != nullptr);
+
+	if (static_cast<std::string>(*property) == "prototype")
+		return true;
+
+	return object->doDelete(property);
+}
+
 //    ____  _     _           _   ______                              _
 //   / __ \| |   (_)         | | |  ____|                            (_)
 //  | |  | | |__  _  ___  ___| |_| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
@@ -1081,6 +1150,8 @@ std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 		case JSTOK_LPAREN:
 		case JSTOK_FUNCTION:
 		case JSTOK_ASSIGN:
+		case JSTOK_DELETE:
+		case JSTOK_NEW:
 			out = Expression::create(node);
 			break;
 		default:
