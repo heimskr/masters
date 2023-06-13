@@ -1147,11 +1147,42 @@ std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 		case JS_BLOCK:
 			out = std::make_unique<Block>(node);
 			break;
-		case JSTOK_LPAREN:
-		case JSTOK_FUNCTION:
+		case JSTOK_TEQ:
+		case JSTOK_NTEQ:
+		case JSTOK_LT:
+		case JSTOK_LTE:
+		case JSTOK_GT:
+		case JSTOK_GTE:
+		case JSTOK_MOD:
+		case JSTOK_TIMES:
+		case JSTOK_DIV:
+		case JSTOK_EXP:
 		case JSTOK_ASSIGN:
-		case JSTOK_DELETE:
+		case JSTOK_COMMA:
+		case JSTOK_PLUS:
+		case JSTOK_MINUS:
+		case JSTOK_PLUSPLUS:
+		case JS_POSTPLUS:
+		case JSTOK_MINUSMINUS:
+		case JS_POSTMINUS:
+		case JSTOK_NOT:
+		case JSTOK_IDENT:
+		case JSTOK_NUMBER:
+		case JSTOK_NAN:
+		case JSTOK_INFINITY:
+		case JSTOK_STRING:
+		case JSTOK_UNDEFINED:
+		case JSTOK_NULL:
+		case JSTOK_LPAREN:
+		case JSTOK_TRUE:
+		case JSTOK_FALSE:
+		case JSTOK_FUNCTION:
+		case JS_OBJECT:
+		case JSTOK_PERIOD:
+		case JS_ARRAY:
+		case JSTOK_LSQUARE:
 		case JSTOK_NEW:
+		case JSTOK_DELETE:
 			out = Expression::create(node);
 			break;
 		default:
