@@ -256,6 +256,24 @@ Value * BinaryExpression::evaluate(Context &context) {
 		case Type::Division:
 			return *left->evaluate(context) / *right->evaluate(context);
 
+		case Type::BitwiseAnd:
+			return *left->evaluate(context) & *right->evaluate(context);
+
+		case Type::BitwiseOr:
+			return *left->evaluate(context) | *right->evaluate(context);
+
+		case Type::BitwiseXor:
+			return *left->evaluate(context) ^ *right->evaluate(context);
+
+		case Type::LeftShift:
+			return *left->evaluate(context) << *right->evaluate(context);
+
+		case Type::RightShiftArithmetic:
+			return left->evaluate(context)->shiftRightArithmetic(*right->evaluate(context));
+
+		case Type::RightShiftLogical:
+			return left->evaluate(context)->shiftRightLogical(*right->evaluate(context));
+
 		case Type::Exponentiation:
 			return left->evaluate(context)->power(*right->evaluate(context));
 
@@ -290,10 +308,12 @@ Value * BinaryExpression::evaluate(Context &context) {
 		case Type::RightShiftLogicalAssignment:
 			return evaluateAccess(context);
 
-		default:
-			throw Unimplemented("Can't evaluate BinaryExpression with type " + std::to_string(static_cast<int>(type)) +
-				": unimplemented");
+		case Type::Invalid:
+			break;
 	}
+
+	throw Unimplemented("Can't evaluate BinaryExpression with type " + std::to_string(static_cast<int>(type)) +
+		": unimplemented");
 }
 
 Value * BinaryExpression::evaluateAccess(Context &context) {
