@@ -304,6 +304,7 @@ class Function: public Value {
 		FunctionType function;
 		Reference *thisObj = nullptr;
 		Closure closure;
+		Object *prototype = nullptr;
 		bool isProperty = false;
 		Function(FunctionType function_ = {}, Reference *this_obj = nullptr, Closure closure_ = {},
 		         bool is_property = false);
@@ -314,6 +315,7 @@ class Function: public Value {
 		ValueType getType() const override { return ValueType::Function; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Function"; }
+		Object * getFunctionPrototype();
 		explicit operator std::string() const override { return "function(...) {...}"; }
 		explicit operator double()      const override { return nan("");               }
 		explicit operator bool()        const override { return true;                  }

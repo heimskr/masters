@@ -609,3 +609,12 @@ std::unordered_set<Value *> Function::getReferents() const {
 		out.insert(thisObj);
 	return out;
 }
+
+Object * Function::getFunctionPrototype() {
+	if (prototype == nullptr) {
+		prototype = context->makeValue<Object>();
+		prototype->map["constructor"] = context->makeReference(this);
+	}
+
+	return prototype;
+}

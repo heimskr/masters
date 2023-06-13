@@ -842,7 +842,7 @@ Value * NewExpression::evaluate(Context &context) {
 	assert(constructor != nullptr);
 
 	Object *object = context.makeValue<Object>();
-	object->customPrototype = constructor->getPrototype(context);
+	object->customPrototype = constructor->getFunctionPrototype();
 
 	std::vector<Value *> argument_values;
 	argument_values.reserve(arguments.size());
@@ -924,13 +924,19 @@ Value * NumberLiteral::evaluate(Context &context) {
 Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &property) {
 	assert(lhs != nullptr);
 
-	auto *object = dynamic_cast<Object *>(lhs->ultimateValue());
+	auto *object = lhs->ultimateValue()->cast<Object>();
 	if (object != nullptr)
 		if (auto iter = object->map.find(property); iter != object->map.end())
 			return iter->second;
 
+	if (property == "prototype") {
+		if (auto *function = lhs->ultimateValue()->cast<Function>()) {
+			return function->getFunctionPrototype();
+		}
+	}
+
 	try {
-		if (Object *prototype = lhs->getPrototype(context))
+		if (Object *prototype = lhs->getPrototype(context)) {
 			if (auto iter = prototype->map.find(property); iter != prototype->map.end()) {
 				auto *reference = iter->second->withContext({context.makeReference(lhs)});
 
@@ -945,6 +951,7 @@ Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &
 
 				return reference;
 			}
+		}
 	} catch (const TypeError &) {
 		// TODO!: once all prototypes are implemented, let this pass through perhaps?
 	}
