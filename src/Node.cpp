@@ -294,6 +294,9 @@ Value * BinaryExpression::evaluate(Context &context) {
 		case Type::In:
 			return right->evaluate(context)->contains(*left->evaluate(context));
 
+		case Type::Instanceof:
+			throw Unimplemented();
+
 		case Type::Assignment:
 		case Type::AdditionAssignment:
 		case Type::SubtractionAssignment:
