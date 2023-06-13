@@ -268,6 +268,25 @@ void Array::convertToHoley() {
 	values = std::move(holey);
 }
 
+Value * Array::contains(const Value &other) const {
+	const auto string = static_cast<std::string>(other);
+
+	if (map.contains(string))
+		return context->toValue(true);
+
+	const auto number = static_cast<double>(other);
+	double intpart;
+	if (!isFinite(number) || std::modf(number, &intpart) != 0.)
+		return context->toValue(false);
+
+	const auto index = static_cast<size_t>(number);
+
+	if (isHoley())
+		return context->toValue(std::get<Holey>(values).contains(index));
+
+	return context->toValue(index < size());
+}
+
 Object::Object(const Array &array) {
 	if (array.isHoley()) {
 		const auto &holey = std::get<Array::Holey>(array.values);
@@ -472,6 +491,11 @@ Value * Value::shiftRightArithmetic(const Value &other) const {
 	return make<Number>(static_cast<int64_t>(*this) >> static_cast<int64_t>(other));
 }
 
+Value * Value::contains(const Value &other) const {
+	throw TypeError("Cannot use \"in\" operator to search for \"" + static_cast<std::string>(other) + "\" in " +
+		static_cast<std::string>(*this));
+}
+
 Value * Null::operator==(const Value &right) const {
 	if (dynamic_cast<const Null *>(&right))
 		return make<Boolean>(true);
@@ -647,6 +671,11 @@ Value * Reference::shiftRightArithmetic(const Value &other) const {
 	return referent->shiftRightArithmetic(other);
 }
 
+Value * Reference::contains(const Value &other) const {
+	assertReferent();
+	return referent->contains(other);
+}
+
 Function::Function(FunctionType function_, Reference *this_obj, Closure closure_, bool is_property):
 	function(std::move(function_)),
 	thisObj(this_obj),
@@ -715,4 +744,8 @@ bool HasMap::doDelete(const std::string &property) {
 	}
 
 	return false;
+}
+
+Value * HasMap::contains(const Value &other) const {
+	return context->toValue(map.contains(static_cast<std::string>(other)));
 }

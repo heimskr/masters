@@ -291,6 +291,9 @@ Value * BinaryExpression::evaluate(Context &context) {
 			left->evaluate(context);
 			return right->evaluate(context);
 
+		case Type::In:
+			return right->evaluate(context)->contains(*left->evaluate(context));
+
 		case Type::Assignment:
 		case Type::AdditionAssignment:
 		case Type::SubtractionAssignment:
@@ -389,39 +392,41 @@ Value * BinaryExpression::evaluateAccess(Context &context) {
 
 BinaryExpression::Type BinaryExpression::getType(int symbol) {
 	switch (symbol) {
-		case JSTOK_TEQ:     return Type::TripleEquals;
-		case JSTOK_NTEQ:    return Type::TripleNotEquals;
-		case JSTOK_PLUS:    return Type::Addition;
-		case JSTOK_MINUS:   return Type::Subtraction;
-		case JSTOK_LT:      return Type::LessThan;
-		case JSTOK_LTE:     return Type::LessThanOrEqual;
-		case JSTOK_GT:      return Type::GreaterThan;
-		case JSTOK_GTE:     return Type::GreaterThanOrEqual;
-		case JSTOK_MOD:     return Type::Modulo;
-		case JSTOK_TIMES:   return Type::Multiplication;
-		case JSTOK_DIV:     return Type::Division;
-		case JSTOK_EXP:     return Type::Exponentiation;
-		case JSTOK_ASSIGN:  return Type::Assignment;
-		case JSTOK_COMMA:   return Type::Comma;
-		case JSTOK_PLUSEQ:  return Type::AdditionAssignment;
-		case JSTOK_MINUSEQ: return Type::SubtractionAssignment;
-		case JSTOK_DIVEQ:   return Type::DivisionAssignment;
-		case JSTOK_TIMESEQ: return Type::MultiplicationAssignment;
-		case JSTOK_MODEQ:   return Type::ModuloAssignment;
-		case JSTOK_SRAEQ:   return Type::RightShiftArithmeticAssignment;
-		case JSTOK_SRLEQ:   return Type::RightShiftLogicalAssignment;
-		case JSTOK_SLEQ:    return Type::LeftShiftAssignment;
-		case JSTOK_ANDEQ:   return Type::BitwiseAndAssignment;
-		case JSTOK_LANDEQ:  return Type::LogicalAndAssignment;
-		case JSTOK_OREQ:    return Type::BitwiseOrAssignment;
-		case JSTOK_LOREQ:   return Type::LogicalOrAssignment;
-		case JSTOK_XOREQ:   return Type::BitwiseXorAssignment;
-		case JSTOK_EXPEQ:   return Type::ExponentiationAssignment;
-		case JSTOK_LAND:    return Type::LogicalAnd;
-		case JSTOK_LOR:     return Type::LogicalOr;
-		case JSTOK_OR:      return Type::BitwiseOr;
-		case JSTOK_XOR:     return Type::BitwiseXor;
-		case JSTOK_AND:     return Type::BitwiseAnd;
+		case JSTOK_TEQ:        return Type::TripleEquals;
+		case JSTOK_NTEQ:       return Type::TripleNotEquals;
+		case JSTOK_PLUS:       return Type::Addition;
+		case JSTOK_MINUS:      return Type::Subtraction;
+		case JSTOK_LT:         return Type::LessThan;
+		case JSTOK_LTE:        return Type::LessThanOrEqual;
+		case JSTOK_GT:         return Type::GreaterThan;
+		case JSTOK_GTE:        return Type::GreaterThanOrEqual;
+		case JSTOK_MOD:        return Type::Modulo;
+		case JSTOK_TIMES:      return Type::Multiplication;
+		case JSTOK_DIV:        return Type::Division;
+		case JSTOK_EXP:        return Type::Exponentiation;
+		case JSTOK_ASSIGN:     return Type::Assignment;
+		case JSTOK_COMMA:      return Type::Comma;
+		case JSTOK_PLUSEQ:     return Type::AdditionAssignment;
+		case JSTOK_MINUSEQ:    return Type::SubtractionAssignment;
+		case JSTOK_DIVEQ:      return Type::DivisionAssignment;
+		case JSTOK_TIMESEQ:    return Type::MultiplicationAssignment;
+		case JSTOK_MODEQ:      return Type::ModuloAssignment;
+		case JSTOK_SRAEQ:      return Type::RightShiftArithmeticAssignment;
+		case JSTOK_SRLEQ:      return Type::RightShiftLogicalAssignment;
+		case JSTOK_SLEQ:       return Type::LeftShiftAssignment;
+		case JSTOK_ANDEQ:      return Type::BitwiseAndAssignment;
+		case JSTOK_LANDEQ:     return Type::LogicalAndAssignment;
+		case JSTOK_OREQ:       return Type::BitwiseOrAssignment;
+		case JSTOK_LOREQ:      return Type::LogicalOrAssignment;
+		case JSTOK_XOREQ:      return Type::BitwiseXorAssignment;
+		case JSTOK_EXPEQ:      return Type::ExponentiationAssignment;
+		case JSTOK_LAND:       return Type::LogicalAnd;
+		case JSTOK_LOR:        return Type::LogicalOr;
+		case JSTOK_OR:         return Type::BitwiseOr;
+		case JSTOK_XOR:        return Type::BitwiseXor;
+		case JSTOK_AND:        return Type::BitwiseAnd;
+		case JSTOK_IN:         return Type::In;
+		case JSTOK_INSTANCEOF: return Type::Instanceof;
 		default:
 			throw std::invalid_argument("Unknown symbol in BinaryExpression::getType: " +
 				std::string(jsParser.getName(symbol)));
@@ -617,6 +622,8 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_OR:
 		case JSTOK_XOR:
 		case JSTOK_AND:
+		case JSTOK_IN:
+		case JSTOK_INSTANCEOF:
 			out = std::make_unique<BinaryExpression>(node);
 			break;
 
@@ -1271,6 +1278,8 @@ std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 		case JSTOK_OR:
 		case JSTOK_XOR:
 		case JSTOK_AND:
+		case JSTOK_IN:
+		case JSTOK_INSTANCEOF:
 			out = Expression::create(node);
 			break;
 		default:

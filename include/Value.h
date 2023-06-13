@@ -85,6 +85,8 @@ class Value {
 		virtual Value * operator<<(const Value &) const;
 		virtual Value * shiftRightLogical(const Value &) const;
 		virtual Value * shiftRightArithmetic(const Value &) const;
+		/** This is like the "in" operator, but the other way around. */
+		virtual Value * contains(const Value &) const;
 
 		template <typename T>
 		T * cast() {
@@ -149,6 +151,7 @@ class HasMap: public Value {
 		Reference * access(const std::string &property, bool can_create) override;
 		bool doDelete(Value *) override;
 		bool doDelete(const std::string &) override;
+		Value * contains(const Value &) const override;
 
 	protected:
 		HasMap() = default;
@@ -190,6 +193,7 @@ class Array: public HasMap {
 		bool empty() const;
 		VALUE_OPERATOR_OVERRIDES
 		VALUE_USING
+		Value * contains(const Value &) const override;
 
 	private:
 		void convertToHoley();
@@ -324,6 +328,7 @@ class Reference: public Value {
 		Value * shiftRightLogical(const Value &) const override;
 		Value * shiftRightArithmetic(const Value &) const override;
 		VALUE_USING
+		Value * contains(const Value &) const override;
 };
 
 class Function: public HasMap {
