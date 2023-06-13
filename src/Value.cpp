@@ -36,6 +36,14 @@ Object * Value::getPrototype(Context &context) const {
 	throw TypeError("Cannot get prototype of type " + getName());
 }
 
+Reference * Value::access(Value *, bool) {
+	return nullptr;
+}
+
+Reference * Value::access(const std::string &, bool) {
+	return nullptr;
+}
+
 Array::operator std::string() const {
 	std::ostringstream oss;
 
@@ -180,6 +188,38 @@ Reference *& Array::fetchOrMake(size_t index) {
 
 	convertToHoley();
 	return fetchOrMake(index);
+}
+
+Reference * Array::access(Value *index, bool can_create) {
+	if (auto *found = access(static_cast<double>(*index)))
+		return found;
+	return HasMap::access(index, can_create);
+}
+
+Reference * Array::access(const std::string &property, bool can_create) {
+	try {
+		return access(parseDouble(property));
+	} catch (const std::invalid_argument &) {
+		return HasMap::access(property, can_create);
+	}
+}
+
+Reference * Array::access(double number) {
+	double intpart = 0.;
+	if (isFinite(number) && std::modf(number, &intpart) == 0.) {
+		auto index = static_cast<size_t>(intpart);
+		if (isHoley()) {
+			const auto &holey = std::get<Holey>(values);
+			if (auto iter = holey.find(index); iter != holey.end())
+				return iter->second;
+		} else {
+			const auto &holeless = std::get<Holeless>(values);
+			if (index < holeless.size())
+				return holeless.at(index);
+		}
+	}
+
+	return nullptr;
 }
 
 size_t Array::size() const {
@@ -617,4 +657,26 @@ Object * Function::getFunctionPrototype() {
 	}
 
 	return prototype;
+}
+
+Reference * HasMap::access(Value *index, bool can_create) {
+	const auto string_index = static_cast<std::string>(*index);
+
+	if (auto iter = map.find(string_index); iter != map.end())
+		return iter->second;
+
+	if (can_create)
+		return map[string_index] = context->makeReference<Undefined>();
+
+	return nullptr;
+}
+
+Reference * HasMap::access(const std::string &property, bool can_create) {
+	if (auto iter = map.find(property); iter != map.end())
+		return iter->second;
+
+	if (can_create)
+		return map[property] = context->makeReference<Undefined>();
+
+	return nullptr;
 }

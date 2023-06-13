@@ -47,6 +47,13 @@ class Value {
 
 		virtual Object * getPrototype(Context &) const;
 
+		/** Attempts to access a field of a value. If `can_create` is true and the field doesn't exist, this function
+		 *  will create a field in a relevant location, initialize it to undefined and return a reference to the new
+		 *  value. Otherwise, if the field doesn't exist, this function will return nullptr.
+		 *  Note that for some values like null and undefined, this function will always return nullptr. */
+		virtual Reference * access(Value *index, bool can_create);
+		virtual Reference * access(const std::string &property, bool can_create);
+
 		virtual explicit operator bool() const = 0;
 		virtual explicit operator std::string() const = 0;
 		virtual explicit operator double() const = 0;
@@ -132,7 +139,17 @@ class Undefined: public Value {
 		VALUE_USING
 };
 
-class Array: public Value {
+class HasMap: public Value {
+	public:
+		std::map<std::string, Reference *> map;
+		Reference * access(Value *index, bool can_create) override;
+		Reference * access(const std::string &property, bool can_create) override;
+
+	protected:
+		HasMap() = default;
+};
+
+class Array: public HasMap {
 	public:
 		using Holeless = std::vector<Reference *>;
 		using Holey    = std::map<size_t, Reference *>;
@@ -160,6 +177,9 @@ class Array: public Value {
 		Reference * operator[](size_t) const;
 		/** Will add and return an Undefined value for out-of-range accesses. */
 		Reference *& fetchOrMake(size_t);
+		Reference * access(Value *index, bool can_create) override;
+		Reference * access(const std::string &property, bool can_create) override;
+		Reference * access(double);
 		size_t size() const;
 		bool empty() const;
 		VALUE_OPERATOR_OVERRIDES
@@ -169,9 +189,8 @@ class Array: public Value {
 		void convertToHoley();
 };
 
-class Object: public Value {
+class Object: public HasMap {
 	public:
-		std::map<std::string, Reference *> map;
 		Object() = default;
 		Object(const Array &);
 		Value * copy() const override;
@@ -189,7 +208,7 @@ class Object: public Value {
 		VALUE_USING
 };
 
-class Number: public Value {
+class Number: public HasMap {
 	public:
 		double number;
 		Number(double number_): number(number_) {}
@@ -205,7 +224,7 @@ class Number: public Value {
 		VALUE_USING
 };
 
-class Boolean: public Value {
+class Boolean: public HasMap {
 	public:
 		bool boolean;
 		Boolean(double boolean_): boolean(boolean_) {}
@@ -268,6 +287,7 @@ class Reference: public Value {
 		Number * toNumber() const override { assertReferent(); return referent->toNumber(); }
 		std::string getName() const override { assertReferent(); return "Reference[" + referent->getName() + ']'; }
 		bool subscriptable() const override { assertReferent(); return referent->subscriptable(); }
+		Reference * access(Value *index, bool can_create) override { return referent->access(index, can_create); }
 
 		Reference * withContext(ReferenceContext) const;
 
@@ -298,7 +318,7 @@ class Reference: public Value {
 		VALUE_USING
 };
 
-class Function: public Value {
+class Function: public HasMap {
 	public:
 		using FunctionType = std::function<Value *(Context &, const std::vector<Value *> &args, Reference *this_obj)>;
 		FunctionType function;

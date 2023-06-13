@@ -11,3 +11,9 @@ Foo.prototype.negate = function() {
 
 console.log(Foo.prototype);
 console.log(foo.negate());
+
+foo.negate = function() {
+	return -10 * this.b;
+};
+
+console.log(foo.negate());

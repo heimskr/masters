@@ -924,16 +924,12 @@ Value * NumberLiteral::evaluate(Context &context) {
 Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &property) {
 	assert(lhs != nullptr);
 
-	auto *object = lhs->ultimateValue()->cast<Object>();
-	if (object != nullptr)
-		if (auto iter = object->map.find(property); iter != object->map.end())
-			return iter->second;
-
-	if (property == "prototype") {
-		if (auto *function = lhs->ultimateValue()->cast<Function>()) {
+	if (property == "prototype")
+		if (auto *function = lhs->ultimateValue()->cast<Function>())
 			return function->getFunctionPrototype();
-		}
-	}
+
+	if (auto *found = lhs->access(property, context.writingMember))
+		return found;
 
 	try {
 		if (Object *prototype = lhs->getPrototype(context)) {
@@ -954,14 +950,6 @@ Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &
 		}
 	} catch (const TypeError &) {
 		// TODO!: once all prototypes are implemented, let this pass through perhaps?
-	}
-
-	if (object != nullptr) {
-		auto *undefined = context.makeValue<Reference>(context.makeValue<Undefined>(), false,
-			context.makeReference(object));
-		if (context.writingMember)
-			return object->map[property] = undefined;
-		return undefined;
 	}
 
 	return context.makeValue<Reference>(context.makeValue<Undefined>(), false);
