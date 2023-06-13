@@ -259,6 +259,16 @@ Value * BinaryExpression::evaluate(Context &context) {
 		case Type::Exponentiation:
 			return left->evaluate(context)->power(*right->evaluate(context));
 
+		case Type::LogicalAnd:
+			if (!*left->evaluate(context))
+				return context.toValue(false);
+			return context.toValue(static_cast<bool>(*right->evaluate(context)));
+
+		case Type::LogicalOr:
+			if (*left->evaluate(context))
+				return context.toValue(true);
+			return context.toValue(static_cast<bool>(*right->evaluate(context)));
+
 		case Type::Comma:
 			left->evaluate(context);
 			return right->evaluate(context);
@@ -359,20 +369,39 @@ Value * BinaryExpression::evaluateAccess(Context &context) {
 
 BinaryExpression::Type BinaryExpression::getType(int symbol) {
 	switch (symbol) {
-		case JSTOK_TEQ:    return Type::TripleEquals;
-		case JSTOK_NTEQ:   return Type::TripleNotEquals;
-		case JSTOK_PLUS:   return Type::Addition;
-		case JSTOK_MINUS:  return Type::Subtraction;
-		case JSTOK_LT:     return Type::LessThan;
-		case JSTOK_LTE:    return Type::LessThanOrEqual;
-		case JSTOK_GT:     return Type::GreaterThan;
-		case JSTOK_GTE:    return Type::GreaterThanOrEqual;
-		case JSTOK_MOD:    return Type::Modulo;
-		case JSTOK_TIMES:  return Type::Multiplication;
-		case JSTOK_DIV:    return Type::Division;
-		case JSTOK_EXP:    return Type::Exponentiation;
-		case JSTOK_ASSIGN: return Type::Assignment;
-		case JSTOK_COMMA:  return Type::Comma;
+		case JSTOK_TEQ:     return Type::TripleEquals;
+		case JSTOK_NTEQ:    return Type::TripleNotEquals;
+		case JSTOK_PLUS:    return Type::Addition;
+		case JSTOK_MINUS:   return Type::Subtraction;
+		case JSTOK_LT:      return Type::LessThan;
+		case JSTOK_LTE:     return Type::LessThanOrEqual;
+		case JSTOK_GT:      return Type::GreaterThan;
+		case JSTOK_GTE:     return Type::GreaterThanOrEqual;
+		case JSTOK_MOD:     return Type::Modulo;
+		case JSTOK_TIMES:   return Type::Multiplication;
+		case JSTOK_DIV:     return Type::Division;
+		case JSTOK_EXP:     return Type::Exponentiation;
+		case JSTOK_ASSIGN:  return Type::Assignment;
+		case JSTOK_COMMA:   return Type::Comma;
+		case JSTOK_PLUSEQ:  return Type::AdditionAssignment;
+		case JSTOK_MINUSEQ: return Type::SubtractionAssignment;
+		case JSTOK_DIVEQ:   return Type::DivisionAssignment;
+		case JSTOK_TIMESEQ: return Type::MultiplicationAssignment;
+		case JSTOK_MODEQ:   return Type::ModuloAssignment;
+		case JSTOK_SRAEQ:   return Type::RightShiftArithmeticAssignment;
+		case JSTOK_SRLEQ:   return Type::RightShiftLogicalAssignment;
+		case JSTOK_SLEQ:    return Type::LeftShiftAssignment;
+		case JSTOK_ANDEQ:   return Type::BitwiseAndAssignment;
+		case JSTOK_LANDEQ:  return Type::LogicalAndAssignment;
+		case JSTOK_OREQ:    return Type::BitwiseOrAssignment;
+		case JSTOK_LOREQ:   return Type::LogicalOrAssignment;
+		case JSTOK_XOREQ:   return Type::BitwiseXorAssignment;
+		case JSTOK_EXPEQ:   return Type::ExponentiationAssignment;
+		case JSTOK_LAND:    return Type::LogicalAnd;
+		case JSTOK_LOR:     return Type::LogicalOr;
+		case JSTOK_OR:      return Type::BitwiseOr;
+		case JSTOK_XOR:     return Type::BitwiseXor;
+		case JSTOK_AND:     return Type::BitwiseAnd;
 		default:
 			throw std::invalid_argument("Unknown symbol in BinaryExpression::getType: " +
 				std::string(jsParser.getName(symbol)));
@@ -549,6 +578,25 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_EXP:
 		case JSTOK_ASSIGN:
 		case JSTOK_COMMA:
+		case JSTOK_PLUSEQ:
+		case JSTOK_MINUSEQ:
+		case JSTOK_DIVEQ:
+		case JSTOK_TIMESEQ:
+		case JSTOK_MODEQ:
+		case JSTOK_SRAEQ:
+		case JSTOK_SRLEQ:
+		case JSTOK_SLEQ:
+		case JSTOK_ANDEQ:
+		case JSTOK_LANDEQ:
+		case JSTOK_OREQ:
+		case JSTOK_LOREQ:
+		case JSTOK_XOREQ:
+		case JSTOK_EXPEQ:
+		case JSTOK_LAND:
+		case JSTOK_LOR:
+		case JSTOK_OR:
+		case JSTOK_XOR:
+		case JSTOK_AND:
 			out = std::make_unique<BinaryExpression>(node);
 			break;
 
@@ -701,7 +749,8 @@ Value * FunctionCall::evaluate(Context &context) {
 	assert(evaluated_function != nullptr);
 
 	if (evaluated_function->ultimateType() != ValueType::Function)
-		throw TypeError("Value " + static_cast<std::string>(*evaluated_function) + " is not a function");
+		throw TypeError("Value " + static_cast<std::string>(*evaluated_function) + " (" + evaluated_function->getName()
+			+ ") is not a function");
 
 	auto &cast_function = dynamic_cast<Function &>(*evaluated_function->ultimateValue());
 
@@ -1183,6 +1232,25 @@ std::unique_ptr<Statement> Statement::create(const ASTNode &node) {
 		case JSTOK_LSQUARE:
 		case JSTOK_NEW:
 		case JSTOK_DELETE:
+		case JSTOK_PLUSEQ:
+		case JSTOK_MINUSEQ:
+		case JSTOK_DIVEQ:
+		case JSTOK_TIMESEQ:
+		case JSTOK_MODEQ:
+		case JSTOK_SRAEQ:
+		case JSTOK_SRLEQ:
+		case JSTOK_SLEQ:
+		case JSTOK_ANDEQ:
+		case JSTOK_LANDEQ:
+		case JSTOK_OREQ:
+		case JSTOK_LOREQ:
+		case JSTOK_XOREQ:
+		case JSTOK_EXPEQ:
+		case JSTOK_LAND:
+		case JSTOK_LOR:
+		case JSTOK_OR:
+		case JSTOK_XOR:
+		case JSTOK_AND:
 			out = Expression::create(node);
 			break;
 		default:

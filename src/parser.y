@@ -269,7 +269,7 @@ string: JSTOK_STRING;
 
 boolean: "true" | "false";
 
-function_call: full_expr "(" exprlist_ ")" { $$ = $2->adopt({$1, $3}); D($4); };
+function_call: expr "(" exprlist_ ")" { $$ = $2->adopt({$1, $3}); D($4); };
 
 exprlist: exprlist "," full_expr { $$ = $1->adopt($3); D($2); }
         | full_expr              { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); };

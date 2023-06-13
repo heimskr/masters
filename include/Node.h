@@ -26,7 +26,7 @@ enum class NodeType {
 	Invalid = 0, Program, Block, IfStatement, BinaryExpression, UnaryExpression, VariableDefinition,
 	VariableDefinitions, FunctionCall, WhileLoop, Continue, Break, FunctionExpression, Return, ObjectExpression,
 	DotExpression, NumberLiteral, StringLiteral, BooleanLiteral, ArrayExpression, AccessExpression, UndefinedLiteral,
-	NullLiteral, ForLoop, NewExpression, DeleteExpression,
+	NullLiteral, ForLoop, NewExpression, DeleteExpression, Identifier,
 };
 
 struct VariableUsage {
@@ -41,7 +41,7 @@ class Node {
 		ASTLocation location;
 
 		virtual ~Node() = default;
-		virtual NodeType getType() const { return NodeType::Invalid; }
+		virtual NodeType getType() const = 0;
 
 		virtual Value * evaluate(Context &) {
 			throw std::runtime_error("Cannot evaluate node of type " + std::string(typeid(*this).name()));
@@ -118,6 +118,7 @@ class Identifier: public LValueExpression {
 	public:
 		std::string name;
 		Identifier(const ASTNode &);
+		virtual NodeType getType() const override { return NodeType::Identifier; }
 		Value * evaluate(Context &) override;
 		void findVariables(std::vector<VariableUsage> &) const override;
 		bool doDelete(Context &) override;
