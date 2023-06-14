@@ -26,7 +26,7 @@ enum class ValueType {Null, Undefined, Object, Array, Number, Boolean, String, R
 class Value {
 	public:
 		Context *context = nullptr;
-		Object *customPrototype = nullptr;
+		std::optional<Object *> customPrototype;
 		virtual ~Value() = default;
 
 		virtual Value * copy() const = 0;
@@ -301,7 +301,8 @@ class Reference: public Value {
 		bool doDelete(Value *value) override { return referent->doDelete(value); }
 		bool doDelete(const std::string &property) override { return referent->doDelete(property); }
 
-		Reference * withContext(ReferenceContext) const;
+		Reference * withContext(ReferenceContext);
+		Reference * unwrap(ReferenceContext * = nullptr);
 
 		explicit operator std::string() const override;
 		explicit operator double()      const override;
@@ -355,3 +356,5 @@ class Function: public HasMap {
 		VALUE_OPERATOR_OVERRIDES
 		VALUE_USING
 };
+
+std::ostream & operator<<(std::ostream &, const Value &);

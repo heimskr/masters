@@ -54,7 +54,7 @@ $(PARSERCPP:.cpp=.o): $(PARSERCPP) $(PARSERHDR)
 	$(COMPILER) $(CFLAGS) $(LEXFLAGS) -c $< -o $@
 
 test: $(OUTPUT)
-	./$(OUTPUT) < js/operators.js
+	./$(OUTPUT) < js/protochain.js
 
 define newline
 

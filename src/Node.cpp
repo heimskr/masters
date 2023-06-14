@@ -23,21 +23,6 @@ DeclarationKind getKind(int symbol) {
 	}
 }
 
-const char * stringify(NodeType type) {
-	switch (type) {
-		case NodeType::Invalid:             return "Invalid";
-		case NodeType::Program:             return "Program";
-		case NodeType::Block:               return "Block";
-		case NodeType::VariableDefinition:  return "VariableDefinition";
-		case NodeType::VariableDefinitions: return "VariableDefinitions";
-		case NodeType::IfStatement:         return "IfStatement";
-		case NodeType::BinaryExpression:    return "BinaryExpression";
-		case NodeType::UnaryExpression:     return "UnaryExpression";
-		default:
-			return "???";
-	}
-}
-
 //                                 ______                              _
 //      /\                        |  ____|                            (_)
 //     /  \   ___ ___ ___  ___ ___| |__  __  ___ __  _ __ ___  ___ ___ _  ___  _ __
@@ -328,13 +313,15 @@ Value * BinaryExpression::evaluateAccess(Context &context) {
 	bool is_const = false;
 
 	Value *lhs = left->evaluate(context);
-	auto *reference = dynamic_cast<Reference *>(lhs);
+	auto *reference = lhs->cast<Reference>();
 
 	if (!reference) {
 		WARN("LHS of BinaryExpression isn't a reference, but instead " << lhs->getName());
 		return right->evaluate(context);
 	}
 
+	assert(reference != nullptr);
+	reference = reference->unwrap();
 	assert(reference != nullptr);
 
 	if (is_const)
@@ -794,7 +781,7 @@ Value * FunctionCall::evaluate(Context &context) {
 
 	if (auto *evaluated_reference = evaluated_function->cast<Reference>())
 		if (auto *this_from_object = evaluated_reference->referenceContext.thisObj)
-			this_obj = this_from_object;
+			this_obj = this_from_object->unwrap();
 
 	return FunctionCaller::call(&cast_function, context, argument_values, this_obj);
 }
@@ -1007,12 +994,6 @@ void NewExpression::findVariables(std::vector<VariableUsage> &usages) const {
 //  | |\  | (_) | (_| |  __/
 //  |_| \_|\___/ \__,_|\___|
 
-void Node::assertType(NodeType type) {
-	if (getType() != type)
-		throw std::runtime_error("Assertion failed: " + std::string(typeid(*this).name()) + " at [" +
-			static_cast<std::string>(location) + "] is not an instance of " + stringify(type));
-}
-
 std::unique_ptr<Node> Node::fromAST(const ASTNode &node) {
 	throw std::invalid_argument("Node::fromAST failed: symbol \"" + std::string(node.getName()) + "\" not handled");
 }
@@ -1063,35 +1044,57 @@ Value * NumberLiteral::evaluate(Context &context) {
 Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &property) {
 	assert(lhs != nullptr);
 
-	if (property == "prototype")
-		if (auto *function = lhs->ultimateValue()->cast<Function>())
-			return function->getFunctionPrototype();
-
-	if (auto *found = lhs->access(property, context.writingMember))
-		return found;
-
-	try {
-		if (Object *prototype = lhs->getPrototype(context)) {
-			if (auto iter = prototype->map.find(property); iter != prototype->map.end()) {
-				auto *reference = iter->second->withContext({context.makeReference(lhs)});
-
-				// If the prototype member is a property function, its calling will be handled by the assignment
-				// operator. If not, we'd return the reference anyway. Therefore, we can return early here if this is a
-				// writing context.
-				if (context.writingMember)
-					return reference;
-
-				if (auto *function = reference->ultimateValue()->cast<Function>(); function && function->isProperty)
-					return FunctionCaller::call(function, context, {}, context.makeReference(lhs));
-
-				return reference;
-			}
-		}
-	} catch (const TypeError &) {
-		// TODO!: once all prototypes are implemented, let this pass through perhaps?
-	}
+	if (auto *out = access(context, lhs, property, {context.makeReference(lhs)}, context.writingMember))
+		return out;
 
 	return context.makeValue<Reference>(context.makeValue<Undefined>(), false);
+}
+
+Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &property,
+                               const ReferenceContext &ref_context, bool can_create) {
+	assert(lhs != nullptr);
+
+
+	if (property == "prototype") {
+		if (auto *function = lhs->ultimateValue()->cast<Function>())
+			return function->getFunctionPrototype();
+		if (Object *prototype = lhs->getPrototype(context))
+			return prototype;
+		return context.makeReference<Undefined>();
+	}
+
+	// First, we attempt to find the property without the possibility of creation.
+	// If it fails, we try the prototype chain next.
+	if (auto *found = lhs->access(property, false))
+		return found->withContext(ref_context);
+
+	if (!can_create) {
+		try {
+			if (Object *prototype = lhs->getPrototype(context)) {
+				if (auto *out = access(context, prototype, property, ref_context, false)) {
+					return out;
+				}
+
+				// if (auto iter = prototype->map.find(property); iter != prototype->map.end()) {
+				// 	auto *reference = iter->second->withContext({context.makeReference(lhs)});
+
+				// 	// If the prototype member is a property function, its calling will be handled by the assignment
+				// 	// operator. If not, we'd return the reference anyway. Therefore, we can return early here if this is a
+				// 	// writing context.
+				// 	if (context.writingMember)
+				// 		return reference;
+
+				// 	if (auto *function = reference->ultimateValue()->cast<Function>(); function && function->isProperty)
+				// 		return FunctionCaller::call(function, context, {}, context.makeReference(lhs));
+
+				// 	return reference;
+				// }
+			}
+		} catch (const TypeError &) {}
+	} else if (auto *found = lhs->access(property, true))
+		return found->withContext(ref_context);
+
+	return nullptr;
 }
 
 bool ObjectAccessor::doDelete(Context &, Value *object, Value *property) {

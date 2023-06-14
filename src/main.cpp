@@ -22,11 +22,11 @@ int main(int, char **) {
 		Program program(*jsParser.root);
 		Context context;
 		context.addDefaults();
-		try {
+		// try {
 			program.interpret(context);
-		} catch (const JSError &error) {
-			ERROR("\e[2m[" << error.line << ":" << error.column << "]:\e[22m " << error.what());
-		}
+		// } catch (const JSError &error) {
+		// 	ERROR("\e[2m[" << error.line << ":" << error.column << "]:\e[22m " << error.what());
+		// }
 		std::cout << "Number of values before garbage collection: " << context.valuePool.size() << std::endl;
 		context.garbageCollect();
 		std::cout << "Number of values after garbage collection: " << context.valuePool.size() << std::endl;

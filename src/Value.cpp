@@ -14,14 +14,14 @@ T * Value::make(Args &&...args) const {
 }
 
 std::unordered_set<Value *> Value::getReferents() const {
-	if (customPrototype != nullptr)
-		return {customPrototype};
+	if (customPrototype && *customPrototype != nullptr)
+		return {*customPrototype};
 	return {};
 }
 
 Object * Value::getPrototype(Context &context) const {
-	if (customPrototype != nullptr)
-		return customPrototype;
+	if (customPrototype)
+		return *customPrototype;
 
 	if (auto iter = context.stack.globals.find(className()); iter != context.stack.globals.end()) {
 		auto *object = iter->second->referent->cast<Object>();
@@ -551,9 +551,19 @@ std::unordered_set<Value *> Reference::getReferents() const {
 	return out;
 }
 
-Reference * Reference::withContext(ReferenceContext new_context) const {
+Reference * Reference::withContext(ReferenceContext new_context) {
 	assertReferent();
-	return make<Reference>(referent, isConst, std::move(new_context));
+	return make<Reference>(this, isConst, std::move(new_context));
+}
+
+Reference * Reference::unwrap(ReferenceContext *out_context) {
+	if (referent->getType() != ValueType::Reference) {
+		if (out_context != nullptr)
+			*out_context = referenceContext;
+		return this;
+	}
+
+	return referent->cast<Reference>()->unwrap(out_context);
 }
 
 Reference::operator std::string() const {
@@ -748,4 +758,8 @@ bool HasMap::doDelete(const std::string &property) {
 
 Value * HasMap::contains(const Value &other) const {
 	return context->toValue(map.contains(static_cast<std::string>(other)));
+}
+
+std::ostream & operator<<(std::ostream &os, const Value &value) {
+	return os << static_cast<std::string>(value);
 }

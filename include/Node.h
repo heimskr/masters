@@ -16,6 +16,7 @@ class Context;
 class Function;
 class Statement;
 class Value;
+struct ReferenceContext;
 
 enum class Result {None, Break, Continue, Return};
 enum class DeclarationKind {Invalid = 0, Const, Let, Var};
@@ -56,8 +57,6 @@ class Node {
 			throw Unimplemented("Can't find variables in node of type " + std::string(typeid(*this).name()));
 		}
 
-		void assertType(NodeType);
-
 		static std::unique_ptr<Node> fromAST(const ASTNode &);
 
 		virtual void validateInSingleStatementContext() const {}
@@ -65,8 +64,6 @@ class Node {
 	protected:
 		void absorbPosition(const ASTNode &);
 };
-
-const char * stringify(NodeType);
 
 template <typename T>
 class Makeable {
@@ -393,6 +390,7 @@ class ArrayExpression: public Expression {
 
 struct ObjectAccessor {
 	static Value * access(Context &, Value *, const std::string &);
+	static Value * access(Context &, Value *, const std::string &, const ReferenceContext &, bool can_create);
 	static bool doDelete(Context &, Value *object, Value *property);
 };
 

@@ -184,6 +184,29 @@ void Context::addDefaults() {
 		}}},
 	});
 
+	(*object)["create"] = makeReference<Function>([](Context &context, const std::vector<Value *> &args, auto) -> Value * {
+		if (args.empty())
+			throw TypeError("Object prototype must be an Object or null, not undefined");
+
+		const auto type = args.front()->ultimateType();
+
+		if (type == ValueType::Object) {
+			auto *prototype = args.front()->ultimateValue()->cast<Object>();
+			assert(prototype != nullptr);
+			auto *out = context.makeValue<Object>();
+			out->customPrototype = prototype;
+			return out;
+		}
+
+		if (type == ValueType::Null) {
+			auto *out = context.makeValue<Object>();
+			out->customPrototype = nullptr;
+			return out;
+		}
+
+		throw TypeError("Object prototype must be an Object or null, not " + args.front()->getName());
+	});
+
 	auto *string = makeGlobal<Object>("String");
 
 	(*string)["prototype"] = makePrototype({
