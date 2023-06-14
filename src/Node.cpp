@@ -56,9 +56,6 @@ Value * AccessExpression::evaluate(Context &context) {
 	}
 
 	switch (lhs->ultimateType()) {
-		case ValueType::Object:
-			return access(context, lhs->ultimateValue(), static_cast<std::string>(*rhs));
-
 		case ValueType::Array: {
 			// TODO: verify
 			if (lhs->getType() != ValueType::Reference)
@@ -107,7 +104,7 @@ Value * AccessExpression::evaluate(Context &context) {
 		}
 
 		default:
-			throw TypeError("Can't use [] operator on unsupported value (" + rhs->getName() + ')', location);
+			return access(context, lhs->ultimateValue(), static_cast<std::string>(*rhs));
 	}
 }
 
