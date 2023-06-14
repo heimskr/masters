@@ -112,7 +112,7 @@ Value * Array::copy() const {
 		Holey copies;
 		for (const auto &[key, reference]: holey)
 			copies[key] = make<Reference>(reference->referent, reference->isConst);
-		return (new Array(std::move(copies), holeyLength))->setContext(*context);
+		return context->makeValue<Array>(std::move(copies), holeyLength);
 	}
 
 	const auto &holeless = std::get<Holeless>(values);
@@ -120,7 +120,7 @@ Value * Array::copy() const {
 	for (const auto &reference: holeless)
 		// copies.push_back(make<Reference>(reference->referent));
 		copies.push_back(reference); // TODO: verify
-	return (new Array(std::move(copies)))->setContext(*context);
+	return context->makeValue<Array>(std::move(copies));
 }
 
 Array * Array::holelessCopy() const {
@@ -257,6 +257,19 @@ bool Array::empty() const {
 	return std::get<Holeless>(values).empty();
 }
 
+void Array::push(Value *value) {
+	if (isHoley())
+		std::get<Holey>(values)[++holeyLength] = context->makeReference(value);
+	else
+		std::get<Holeless>(values).push_back(context->makeReference(value));
+}
+
+Value * Array::pop() {
+	// if (isHoley()) {
+	// 	if (holeyLength
+	// 	std::get<Holey>
+}
+
 void Array::convertToHoley() {
 	if (isHoley())
 		return;
@@ -287,7 +300,9 @@ Value * Array::contains(const Value &other) const {
 	return context->toValue(index < size());
 }
 
-Object::Object(const Array &array) {
+Object::Object(const Array &array, Context &context_) {
+	setContext(context_);
+
 	if (array.isHoley()) {
 		const auto &holey = std::get<Array::Holey>(array.values);
 		for (const auto &[key, reference]: holey)

@@ -60,36 +60,50 @@ Value * AccessExpression::evaluate(Context &context) {
 			return access(context, lhs->ultimateValue(), static_cast<std::string>(*rhs));
 
 		case ValueType::Array: {
-			auto *reference = dynamic_cast<Reference *>(lhs);
-			auto &array = dynamic_cast<Array &>(*lhs->ultimateValue());
-
-			if (reference == nullptr)
+			// TODO: verify
+			if (lhs->getType() != ValueType::Reference)
 				return context.makeValue<Undefined>();
+
+			auto &array = dynamic_cast<Array &>(*lhs->ultimateValue());
 
 			bool is_int = false;
 			size_t index = -1;
 
 			if (rhs->ultimateType() == ValueType::Number) {
-				double number = static_cast<double>(*rhs->ultimateValue());
+				const auto number = static_cast<double>(*rhs->ultimateValue());
 				double intpart = 0.;
-				if (modf(number, &intpart) == 0) {
+				if (std::modf(number, &intpart) == 0.) {
 					is_int = true;
 					index = static_cast<size_t>(intpart);
 				}
 			}
 
-			if (!is_int) {
-				const auto stringified = static_cast<std::string>(*rhs);
-				reference->referent = context.makeValue<Object>(array);
-			} else if (context.writingMember) {
+			if (!is_int)
+				return access(context, &array, static_cast<std::string>(*rhs));
+
+			if (context.writingMember)
 				return array.fetchOrMake(index);
-			} else {
-				if (auto *fetched = array[index])
-					return fetched;
-				return context.makeReference<Undefined>();
+
+			if (auto *fetched = array[index])
+				return fetched;
+
+			return context.makeReference<Undefined>();
+		}
+
+		case ValueType::String: {
+			if (rhs->ultimateType() == ValueType::Number) {
+				const auto number = static_cast<double>(*rhs->ultimateValue());
+				double intpart = 0.;
+				if (std::modf(number, &intpart) == 0.) {
+					auto &string = dynamic_cast<String &>(*lhs->ultimateValue());
+					const auto index = static_cast<size_t>(number);
+					if (index < string.string.size())
+						return context.toValue(std::string(1, string.string.at(index)));
+					return context.toValue("");
+				}
 			}
 
-			return reference;
+			return access(context, lhs, static_cast<std::string>(*rhs));
 		}
 
 		default:
@@ -1071,11 +1085,9 @@ Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &
 		return found->withContext(ref_context);
 
 	if (!can_create) {
-		// try {
-			if (Object *prototype = lhs->getPrototype(context))
-				if (auto *out = access(context, prototype, property, ref_context, false))
-					return out;
-		// } catch (const TypeError &) {}
+		if (Object *prototype = lhs->getPrototype(context); prototype != nullptr && prototype != lhs)
+			if (auto *out = access(context, prototype, property, ref_context, false))
+				return out;
 	} else if (auto *found = lhs->access(property, true))
 		return found->withContext(ref_context);
 

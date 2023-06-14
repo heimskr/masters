@@ -165,18 +165,35 @@ static Value * doCall(Context &context, const std::vector<Value *> &args, Refere
 void Context::addDefaults() {
 	makeGlobal<Object>("this");
 
+	using Args = const std::vector<Value *>;
+
 	makeGlobal<Function>("print", doPrint);
 
 	auto *console = makeGlobal<Object>("console");
 	(*console)["log"] = makeReference<Function>(doPrint);
 
-	makeGlobal<Function>("gc", [](Context &context, const std::vector<Value *> &, Value *) {
+	makeGlobal<Function>("gc", [](Context &context, Args &, Value *) {
 		const size_t old_size = context.valuePool.size();
 		context.garbageCollect();
 		return context.makeValue<Number>(old_size - context.valuePool.size());
 	});
 
+	auto *array = makeGlobal<Object>("Array");
+
+	(*array)["prototype"] = makePrototype({
+		{"push", {[](Context &context, Args &args, Reference *this_obj) -> Value * {
+			if (args.empty())
+				return nullptr;
+
+			for (const auto &arg: args) {
+
+			}
+		}}},
+	});
+
 	auto *object = makeGlobal<Object>("Object");
+	object->customPrototype = nullptr;
+	INFO("object[" << object << "], array[" << array << "]");
 
 	(*object)["prototype"] = makePrototype({
 		{"toString", {[](Context &context, auto &, auto) {
@@ -184,7 +201,7 @@ void Context::addDefaults() {
 		}}},
 	});
 
-	(*object)["create"] = makeReference<Function>([](Context &context, const std::vector<Value *> &args, auto) -> Value * {
+	(*object)["create"] = makeReference<Function>([](Context &context, Args &args, auto) -> Value * {
 		if (args.empty())
 			throw TypeError("Object prototype must be an Object or null, not undefined");
 

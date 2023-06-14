@@ -8,3 +8,10 @@ print([,,,,1.5,2,2.5,,,]);
 print([]);
 print([,]);
 print([,,]);
+
+// arr = [];
+// console.log("push:", arr.push(42));
+arr[100] = 42;
+
+console.log(arr.push);
+console.log(arr["push"]);

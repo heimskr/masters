@@ -191,6 +191,8 @@ class Array: public HasMap {
 		bool doDelete(Value *) override;
 		size_t size() const;
 		bool empty() const;
+		void push(Value *);
+		Value * pop();
 		VALUE_OPERATOR_OVERRIDES
 		VALUE_USING
 		Value * contains(const Value &) const override;
@@ -202,7 +204,7 @@ class Array: public HasMap {
 class Object: public HasMap {
 	public:
 		Object() = default;
-		Object(const Array &);
+		Object(const Array &, Context &);
 		Value * copy() const override;
 		std::string className() const override { return "Object"; }
 		ValueType getType() const override { return ValueType::Object; }
