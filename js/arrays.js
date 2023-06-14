@@ -10,6 +10,7 @@ print([,]);
 print([,,]);
 
 arr = [];
-console.log("push:", arr.push(42));
+console.log("push:", arr.push(1, 2, 3));
 console.log(arr);
-console.log(arr["push"]);
+console.log(arr.pop());
+console.log(arr);

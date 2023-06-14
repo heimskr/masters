@@ -114,7 +114,10 @@ static Value * doPrint(Context &context, const std::vector<Value *> &args, Refer
 			first = false;
 		else
 			std::cout << ' ';
-		std::cout << static_cast<std::string>(*value);
+		if (value->ultimateType() == ValueType::Array)
+			std::cout << '[' << static_cast<std::string>(*value) << ']';
+		else
+			std::cout << static_cast<std::string>(*value);
 	}
 	std::cout << std::endl;
 	return context.makeValue<Undefined>();
@@ -181,7 +184,7 @@ void Context::addDefaults() {
 	auto *array = makeGlobal<Object>("Array");
 
 	(*array)["prototype"] = makePrototype({
-		{"push", {[](Context &context, Args &args, Reference *this_obj) -> Value * {
+		{"push", {[](Context &, Args &args, Reference *this_obj) -> Value * {
 			if (args.empty())
 				return nullptr;
 
@@ -191,6 +194,9 @@ void Context::addDefaults() {
 				array.push(arg);
 
 			return args.back();
+		}}},
+		{"pop", {[](Context &, Args &args, Reference *this_obj) -> Value * {
+			return dynamic_cast<Array &>(*this_obj->ultimateValue()).pop();
 		}}},
 	});
 
