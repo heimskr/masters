@@ -96,7 +96,7 @@ Value * AccessExpression::evaluate(Context &context) {
 					const auto index = static_cast<size_t>(number);
 					if (index < string.string.size())
 						return context.toValue(std::string(1, string.string.at(index)));
-					return context.toValue("");
+					return context.makeValue<Undefined>();
 				}
 			}
 
