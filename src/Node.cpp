@@ -1044,8 +1044,11 @@ Value * NumberLiteral::evaluate(Context &context) {
 Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &property) {
 	assert(lhs != nullptr);
 
-	if (auto *out = access(context, lhs, property, {context.makeReference(lhs)}, context.writingMember))
+	if (auto *out = access(context, lhs, property, {context.makeReference(lhs)}, context.writingMember)) {
+		if (auto *function = out->ultimateValue()->cast<Function>(); function && function->isProperty)
+			return FunctionCaller::call(function, context, {}, context.makeReference(lhs));
 		return out;
+	}
 
 	return context.makeValue<Reference>(context.makeValue<Undefined>(), false);
 }
@@ -1053,7 +1056,6 @@ Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &
 Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &property,
                                const ReferenceContext &ref_context, bool can_create) {
 	assert(lhs != nullptr);
-
 
 	if (property == "prototype") {
 		if (auto *function = lhs->ultimateValue()->cast<Function>())
@@ -1069,28 +1071,11 @@ Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &
 		return found->withContext(ref_context);
 
 	if (!can_create) {
-		try {
-			if (Object *prototype = lhs->getPrototype(context)) {
-				if (auto *out = access(context, prototype, property, ref_context, false)) {
+		// try {
+			if (Object *prototype = lhs->getPrototype(context))
+				if (auto *out = access(context, prototype, property, ref_context, false))
 					return out;
-				}
-
-				// if (auto iter = prototype->map.find(property); iter != prototype->map.end()) {
-				// 	auto *reference = iter->second->withContext({context.makeReference(lhs)});
-
-				// 	// If the prototype member is a property function, its calling will be handled by the assignment
-				// 	// operator. If not, we'd return the reference anyway. Therefore, we can return early here if this is a
-				// 	// writing context.
-				// 	if (context.writingMember)
-				// 		return reference;
-
-				// 	if (auto *function = reference->ultimateValue()->cast<Function>(); function && function->isProperty)
-				// 		return FunctionCaller::call(function, context, {}, context.makeReference(lhs));
-
-				// 	return reference;
-				// }
-			}
-		} catch (const TypeError &) {}
+		// } catch (const TypeError &) {}
 	} else if (auto *found = lhs->access(property, true))
 		return found->withContext(ref_context);
 

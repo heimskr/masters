@@ -3,7 +3,7 @@ print(obj.toString() === "[object Object]");
 
 let str = "foobar";
 print(str.toString() === "foobar");
-print(str.length === 6, str.length !== 5);
+print(str.length === 6, str.length !== 5, str.length);
 print(str.substr(2, 2) === "ob", str.substring(1, 4) === "oob");
 print(str.charAt(1) === "o", str.charAt() === "f", str.charAt("3") === "b", str.charAt(NaN) === "f");
 print(str.charAt(Infinity) === "f", str.charAt(-Infinity) === "f");
