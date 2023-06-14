@@ -124,6 +124,8 @@ Value * Array::copy() const {
 }
 
 Array * Array::holelessCopy() const {
+	INFO("holelessCopy()");
+
 	if (!isHoley())
 		return copy()->cast<Array>();
 
@@ -174,6 +176,7 @@ Reference *& Array::fetchOrMake(size_t index) {
 		auto &holey = std::get<Holey>(values);
 		if (auto iter = holey.find(index); iter != holey.end())
 			return iter->second;
+		holeyLength = std::max(holeyLength, index + 1);
 		return holey[index] = make<Reference>(make<Undefined>(), false);
 	}
 
@@ -259,15 +262,31 @@ bool Array::empty() const {
 
 void Array::push(Value *value) {
 	if (isHoley())
-		std::get<Holey>(values)[++holeyLength] = context->makeReference(value);
+		std::get<Holey>(values)[holeyLength++] = context->makeReference(value);
 	else
 		std::get<Holeless>(values).push_back(context->makeReference(value));
 }
 
 Value * Array::pop() {
-	// if (isHoley()) {
-	// 	if (holeyLength
-	// 	std::get<Holey>
+	if (isHoley()) {
+		auto &holey = std::get<Holey>(values);
+		assert((holeyLength == 0) == (holey.empty()));
+		if (!holey.empty()) {
+			auto iter = holey.rbegin().base();
+			auto *out = iter->second;
+			holey.erase(iter);
+			return out;
+		}
+	} else {
+		auto &holeless = std::get<Holeless>(values);
+		if (!holeless.empty()) {
+			auto *out = holeless.back();
+			holeless.pop_back();
+			return out;
+		}
+	}
+
+	return make<Undefined>();
 }
 
 void Array::convertToHoley() {

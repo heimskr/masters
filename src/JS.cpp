@@ -185,15 +185,17 @@ void Context::addDefaults() {
 			if (args.empty())
 				return nullptr;
 
-			for (const auto &arg: args) {
+			auto &array = dynamic_cast<Array &>(*this_obj->ultimateValue());
 
-			}
+			for (const auto &arg: args)
+				array.push(arg);
+
+			return args.back();
 		}}},
 	});
 
 	auto *object = makeGlobal<Object>("Object");
 	object->customPrototype = nullptr;
-	INFO("object[" << object << "], array[" << array << "]");
 
 	(*object)["prototype"] = makePrototype({
 		{"toString", {[](Context &context, auto &, auto) {

@@ -297,9 +297,10 @@ object_item: ident { $$ = $1->adopt($1->copy()); }
            | ident ":" full_expr { $$ = $1->adopt($3); D($2); };
 
 array: "[" array_list "]" { $$ = $1->adopt($2); $$->symbol = JS_ARRAY; D($3); }
+     | "[" "]" { $$ = $1->adopt(new ASTNode(jsParser, JS_LIST)); $$->symbol = JS_ARRAY; D($2); };
 
 array_list: full_expr { $$ = (new ASTNode(jsParser, JS_LIST))->locate($1)->adopt($1); }
-          | { $$ = (new ASTNode(jsParser, JS_LIST))->adopt(new ASTNode(jsParser, JS_EMPTY)); }
+          | "," { $$ = (new ASTNode(jsParser, JS_LIST))->adopt({new ASTNode(jsParser, JS_EMPTY), new ASTNode(jsParser, JS_EMPTY)}); D($1); }
           | array_list "," full_expr_ { $$ = $1->adopt($3); D($2); };
 
 %%

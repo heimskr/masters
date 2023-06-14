@@ -9,9 +9,7 @@ print([]);
 print([,]);
 print([,,]);
 
-// arr = [];
-// console.log("push:", arr.push(42));
-arr[100] = 42;
-
-console.log(arr.push);
+arr = [];
+console.log("push:", arr.push(42));
+console.log(arr);
 console.log(arr["push"]);
