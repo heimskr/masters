@@ -1391,7 +1391,7 @@ Value * UnaryExpression::evaluate(Context &context) {
 			assert(subvalue->getType() == ValueType::Reference);
 			if (subvalue->ultimateType() != ValueType::Number)
 				return context.makeValue<Number>(nan(""));
-			auto *number = dynamic_cast<Number *>(subvalue->ultimateValue());
+			auto *number = subvalue->ultimateValue()->cast<Number>();
 			double new_value = nan("");
 			switch (type) {
 				case Type::PrefixIncrement:  new_value = ++number->number; break;
@@ -1400,9 +1400,7 @@ Value * UnaryExpression::evaluate(Context &context) {
 				case Type::PostfixDecrement: new_value = number->number--; break;
 				default: std::terminate();
 			}
-			auto *out = context.makeValue<Number>(new_value);
-			dynamic_cast<Reference *>(subvalue)->referent = number;
-			return out;
+			return context.makeValue<Number>(new_value);
 		}
 
 		default:
@@ -1489,7 +1487,10 @@ std::pair<Result, Value *> VariableDefinitions::interpret(Context &context) {
 		if (definition->value) {
 			Value *evaluated =definition->value->evaluate(context);
 			assert(evaluated != nullptr);
-			context.stack.insert(name, evaluated);
+			if (auto *reference = evaluated->cast<Reference>())
+				context.stack.insert(name, evaluated->shallowCopy());
+			else
+				context.stack.insert(name, evaluated);
 		} else {
 			context.stack.insert(name, context.makeValue<Undefined>());
 		}

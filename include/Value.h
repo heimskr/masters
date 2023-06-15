@@ -30,7 +30,8 @@ class Value {
 		std::optional<Object *> customPrototype;
 		virtual ~Value() = default;
 
-		virtual Value * copy() const = 0;
+		virtual Value * deepCopy() const = 0;
+		virtual Value * shallowCopy() { return deepCopy(); }
 
 		virtual ValueType getType() const = 0;
 		virtual std::string getName() const = 0;
@@ -118,7 +119,7 @@ class Value {
 class Null: public Value {
 	public:
 		Null() = default;
-		Value * copy() const override;
+		Value * deepCopy() const override;
 		std::string className() const override { return "Null"; }
 		ValueType getType() const override { return ValueType::Null; };
 		Number * toNumber() const override;
@@ -133,7 +134,7 @@ class Null: public Value {
 class Undefined: public Value {
 	public:
 		Undefined() = default;
-		Value * copy() const override;
+		Value * deepCopy() const override;
 		std::string className() const override { return "Undefined"; }
 		ValueType getType() const override { return ValueType::Undefined; }
 		Number * toNumber() const override;
@@ -170,8 +171,10 @@ class Array: public HasMap {
 		Array(): values(Holeless{}) {}
 		Array(Holeless values_): values(std::move(values_)) {}
 		Array(Holey values_, size_t holey_length): values(std::move(values_)), holeyLength(holey_length) {}
-		Value * copy() const override;
-		Array * holelessCopy() const;
+		Value * deepCopy() const override;
+		Value * shallowCopy() override;
+		/** Doesn't copy (returns self) if this array is already holeless. */
+		Array * holelessCopy();
 		std::string className() const override { return "Array"; }
 		ValueType getType() const override { return ValueType::Array; }
 		std::unordered_set<Value *> getReferents() const override;
@@ -210,7 +213,8 @@ class Object: public HasMap {
 	public:
 		Object() = default;
 		Object(const Array &, Context &);
-		Value * copy() const override;
+		Value * deepCopy() const override;
+		Value * shallowCopy() override;
 		std::string className() const override { return "Object"; }
 		ValueType getType() const override { return ValueType::Object; }
 		std::unordered_set<Value *> getReferents() const override;
@@ -229,7 +233,7 @@ class Number: public HasMap {
 	public:
 		double number;
 		Number(double number_): number(number_) {}
-		Value * copy() const override;
+		Value * deepCopy() const override;
 		std::string className() const override { return "Number"; }
 		ValueType getType() const override { return ValueType::Number; }
 		Number * toNumber() const override;
@@ -245,7 +249,7 @@ class Boolean: public HasMap {
 	public:
 		bool boolean;
 		Boolean(double boolean_): boolean(boolean_) {}
-		Value * copy() const override;
+		Value * deepCopy() const override;
 		std::string className() const override { return "Boolean"; }
 		ValueType getType() const override { return ValueType::Boolean; }
 		Number * toNumber() const override;
@@ -261,7 +265,7 @@ class String: public HasMap {
 	public:
 		std::string string;
 		String(std::string string_): string(std::move(string_)) {}
-		Value * copy() const override;
+		Value * deepCopy() const override;
 		std::string className() const override { return "String"; }
 		ValueType getType() const override { return ValueType::String; }
 		Number * toNumber() const override;
@@ -293,7 +297,8 @@ class Reference: public Value {
 			referent(referent_), isConst(is_const), referenceContext{std::forward<Args>(args)...} {}
 
 		/** Note: this creates a copy of the referred-to value, not of the reference! */
-		Value * copy() const override { assertReferent(); return referent->copy(); }
+		Value * deepCopy() const override { assertReferent(); return referent->deepCopy(); }
+		Value * shallowCopy() override { assertReferent(); return referent->shallowCopy(); }
 		std::string className() const override { return referent->className(); }
 		ValueType getType() const override { return ValueType::Reference; }
 		const Value * ultimateValue() const override { assertReferent(); return referent->ultimateValue(); }
@@ -349,8 +354,8 @@ class Function: public HasMap {
 		bool isProperty = false;
 		Function(FunctionType function_ = {}, Reference *this_obj = nullptr, Closure closure_ = {},
 		         bool is_property = false);
-		/** This doesn't deep-clone thisObj. */
-		Value * copy() const override;
+		/** This doesn't actually deep-clone thisObj. */
+		Value * deepCopy() const override;
 		std::string className() const override { return "Function"; }
 		std::unordered_set<Value *> getReferents() const override;
 		ValueType getType() const override { return ValueType::Function; }

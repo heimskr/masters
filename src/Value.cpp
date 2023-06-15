@@ -106,26 +106,29 @@ std::unordered_set<Value *> Array::getReferents() const {
 	return out;
 }
 
-Value * Array::copy() const {
+Value * Array::deepCopy() const {
 	if (isHoley()) {
 		const auto &holey = std::get<Holey>(values);
 		Holey copies;
 		for (const auto &[key, reference]: holey)
-			copies[key] = make<Reference>(reference->referent, reference->isConst);
+			copies[key] = make<Reference>(reference->deepCopy(), reference->isConst);
 		return context->makeValue<Array>(std::move(copies), holeyLength);
 	}
 
 	const auto &holeless = std::get<Holeless>(values);
 	Holeless copies;
 	for (const auto &reference: holeless)
-		// copies.push_back(make<Reference>(reference->referent));
-		copies.push_back(reference); // TODO: verify
+		copies.push_back(make<Reference>(reference->deepCopy(), reference->isConst));
 	return context->makeValue<Array>(std::move(copies));
 }
 
-Array * Array::holelessCopy() const {
+Value * Array::shallowCopy() {
+	return this;
+}
+
+Array * Array::holelessCopy() {
 	if (!isHoley())
-		return copy()->cast<Array>();
+		return this;
 
 	Holeless new_values;
 	const auto &holey = std::get<Holey>(values);
@@ -366,12 +369,15 @@ Object::Object(const Array &array, Context &context_) {
 	}
 }
 
-Value * Object::copy() const {
-	auto *out = new Object;
+Value * Object::deepCopy() const {
+	auto *out = make<Object>();
 	for (const auto &[key, reference]: map)
-		out->map[key] = make<Reference>(reference->referent);
-	out->setContext(*context);
+		out->map[key] = make<Reference>(reference->deepCopy());
 	return out;
+}
+
+Value * Object::shallowCopy() {
+	return this;
 }
 
 Number * Object::toNumber() const {
@@ -401,7 +407,7 @@ std::unordered_set<Value *> Object::getReferents() const {
 	return out;
 }
 
-Value * Null::copy() const {
+Value * Null::deepCopy() const {
 	return context->makeValue<Null>();
 }
 
@@ -409,7 +415,7 @@ Number * Null::toNumber() const {
 	return make<Number>(0.);
 }
 
-Value * Undefined::copy() const {
+Value * Undefined::deepCopy() const {
 	return context->makeValue<Undefined>();
 }
 
@@ -417,7 +423,7 @@ Number * Undefined::toNumber() const {
 	return make<Number>(nan(""));
 }
 
-Value * Number::copy() const {
+Value * Number::deepCopy() const {
 	return context->makeValue<Number>(number);
 }
 
@@ -435,7 +441,7 @@ Number::operator std::string() const {
 	return out;
 }
 
-Value * Boolean::copy() const {
+Value * Boolean::deepCopy() const {
 	return context->makeValue<Boolean>(boolean);
 }
 
@@ -443,7 +449,7 @@ Number * Boolean::toNumber() const {
 	return make<Number>(boolean? 1. : 0.);
 }
 
-Value * String::copy() const {
+Value * String::deepCopy() const {
 	return context->makeValue<String>(string);
 }
 
@@ -758,7 +764,7 @@ Function::Function(FunctionType function_, Reference *this_obj, Closure closure_
 	closure(std::move(closure_)),
 	isProperty(is_property) {}
 
-Value * Function::copy() const {
+Value * Function::deepCopy() const {
 	return context->makeValue<Function>(function, thisObj, closure);
 }
 
