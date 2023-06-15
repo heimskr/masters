@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <deque>
 #include <functional>
 #include <iostream>
 #include <map>
@@ -159,7 +160,7 @@ class HasMap: public Value {
 
 class Array: public HasMap {
 	public:
-		using Holeless = std::vector<Reference *>;
+		using Holeless = std::deque<Reference *>;
 		using Holey    = std::map<size_t, Reference *>;
 		using Values   = std::variant<Holeless, Holey>;
 
@@ -252,7 +253,7 @@ class Boolean: public HasMap {
 		VALUE_USING
 };
 
-class String: public Value {
+class String: public HasMap {
 	public:
 		std::string string;
 		String(std::string string_): string(std::move(string_)) {}

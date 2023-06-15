@@ -161,7 +161,7 @@ ArrayExpression::ArrayExpression(const ASTNode &node) {
 
 Value * ArrayExpression::evaluate(Context &context) {
 	if (isHoley) {
-		std::map<size_t, Reference *> map;
+		Array::Holey map;
 		size_t i = 0;
 		for (const auto &expression: expressions) {
 			if (expression)
@@ -171,7 +171,7 @@ Value * ArrayExpression::evaluate(Context &context) {
 		return context.makeValue<Array>(std::move(map), i);
 	}
 
-	std::vector<Reference *> values;
+	Array::Holeless values;
 	for (const auto &expression: expressions) {
 		assert(expression);
 		values.push_back(context.makeReference(expression->evaluate(context)));
@@ -851,8 +851,7 @@ Value * FunctionExpression::evaluate(Context &context) {
 		for (; i < arguments.size(); ++i)
 			context.stack.insert(arguments.at(i)->name, context.makeValue<Undefined>());
 
-		std::vector<Reference *> argument_references;
-		argument_references.reserve(argument_values.size());
+		Array::Holeless argument_references;
 		for (Value *value: argument_values)
 			argument_references.push_back(context.makeReference(value));
 

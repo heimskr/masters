@@ -124,8 +124,6 @@ Value * Array::copy() const {
 }
 
 Array * Array::holelessCopy() const {
-	INFO("holelessCopy()");
-
 	if (!isHoley())
 		return copy()->cast<Array>();
 
