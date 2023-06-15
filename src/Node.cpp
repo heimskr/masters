@@ -327,11 +327,12 @@ Value * BinaryExpression::evaluateAccess(Context &context) {
 	auto *reference = lhs->cast<Reference>();
 
 	if (!reference) {
-		WARN("LHS of BinaryExpression isn't a reference, but instead " << lhs->getName());
+		WARN("LHS of BinaryExpression isn't a reference, but instead " << lhs->getName() << ": " << *lhs);
 		return right->evaluate(context);
 	}
 
 	assert(reference != nullptr);
+	Reference *original_this = reference->referenceContext.thisObj;
 	reference = reference->unwrap();
 	assert(reference != nullptr);
 
@@ -340,55 +341,74 @@ Value * BinaryExpression::evaluateAccess(Context &context) {
 
 	Value *right_value = right->evaluate(context);
 
+	Value *left_value = reference;
+	Value *out_value = nullptr;
+
+	auto *function = reference->ultimateValue()->cast<Function>();
+	if (function != nullptr && function->isProperty) {
+		assert(original_this != nullptr);
+		left_value = FunctionCaller::call(function, context, {}, original_this);
+	}
+
 	switch (type) {
 		case Type::Assignment:
-			reference->referent = right_value;
-			return reference;
+			out_value = right_value;
+			break;
 		case Type::AdditionAssignment:
-			reference->referent = *reference + *right_value;
-			return reference;
+			out_value = *left_value + *right_value;
+			break;
 		case Type::SubtractionAssignment:
-			reference->referent = *reference - *right_value;
-			return reference;
+			out_value = *left_value - *right_value;
+			break;
 		case Type::MultiplicationAssignment:
-			reference->referent = *reference * *right_value;
-			return reference;
+			out_value = *left_value * *right_value;
+			break;
 		case Type::DivisionAssignment:
-			reference->referent = *reference / *right_value;
-			return reference;
+			out_value = *left_value / *right_value;
+			break;
 		case Type::ModuloAssignment:
-			reference->referent = *reference % *right_value;
-			return reference;
+			out_value = *left_value % *right_value;
+			break;
 		case Type::BitwiseAndAssignment:
-			reference->referent = *reference & *right_value;
-			return reference;
+			out_value = *left_value & *right_value;
+			break;
 		case Type::BitwiseOrAssignment:
-			reference->referent = *reference | *right_value;
-			return reference;
+			out_value = *left_value | *right_value;
+			break;
 		case Type::BitwiseXorAssignment:
-			reference->referent = *reference ^ *right_value;
-			return reference;
+			out_value = *left_value ^ *right_value;
+			break;
 		case Type::ExponentiationAssignment:
-			reference->referent = reference->power(*right_value);
-			return reference;
+			out_value = left_value->power(*right_value);
+			break;
 		case Type::LogicalAndAssignment:
-			reference->referent = *reference && *right_value;
-			return reference;
+			out_value = *left_value && *right_value;
+			break;
 		case Type::LogicalOrAssignment:
-			reference->referent = *reference || *right_value;
-			return reference;
+			out_value = *left_value || *right_value;
+			break;
 		case Type::LeftShiftAssignment:
-			reference->referent = *reference << *right_value;
-			return reference;
+			out_value = *left_value << *right_value;
+			break;
 		case Type::RightShiftArithmeticAssignment:
-			reference->referent = reference->shiftRightArithmetic(*right_value);
-			return reference;
+			out_value = left_value->shiftRightArithmetic(*right_value);
+			break;
 		case Type::RightShiftLogicalAssignment:
-			reference->referent = reference->shiftRightLogical(*right_value);
-			return reference;
+			out_value = left_value->shiftRightLogical(*right_value);
+			break;
 		default:
 			throw std::logic_error("Unsupported assignment operator: " + std::to_string(static_cast<int>(type)));
 	}
+
+	assert(out_value != nullptr);
+
+	if (function != nullptr && function->isProperty) {
+		assert(original_this != nullptr);
+		return FunctionCaller::call(function, context, {out_value}, original_this);
+	}
+
+	reference->referent = out_value;
+	return reference;
 }
 
 BinaryExpression::Type BinaryExpression::getType(int symbol) {
@@ -1055,8 +1075,9 @@ Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &
 	assert(lhs != nullptr);
 
 	if (auto *out = access(context, lhs, property, {context.makeReference(lhs)}, context.writingMember)) {
-		if (auto *function = out->ultimateValue()->cast<Function>(); function && function->isProperty)
-			return FunctionCaller::call(function, context, {}, context.makeReference(lhs));
+		if (!context.writingMember)
+			if (auto *function = out->ultimateValue()->cast<Function>(); function && function->isProperty)
+				return FunctionCaller::call(function, context, {}, context.makeReference(lhs));
 		return out;
 	}
 
@@ -1080,12 +1101,24 @@ Value * ObjectAccessor::access(Context &context, Value *lhs, const std::string &
 	if (auto *found = lhs->access(property, false))
 		return found->withContext(ref_context);
 
-	if (!can_create) {
-		if (Object *prototype = lhs->getPrototype(context); prototype != nullptr && prototype != lhs)
-			if (auto *out = access(context, prototype, property, ref_context, false))
+	if (Object *prototype = lhs->getPrototype(context); prototype != nullptr && prototype != lhs) {
+		if (auto *out = access(context, prototype, property, ref_context, false)) {
+			// If the prototype member is a property function, its calling will be handled by the assignment operator.
+			// If not, we'd return the reference anyway. Therefore, we can return early here if this is a writing
+			// context.
+			if (can_create)
 				return out;
-	} else if (auto *found = lhs->access(property, true))
-		return found->withContext(ref_context);
+
+			if (auto *function = out->ultimateValue()->cast<Function>(); function && function->isProperty)
+				return FunctionCaller::call(function, context, {}, context.makeReference(lhs));
+
+			return out;
+		}
+	}
+
+	if (can_create)
+		if (auto *found = lhs->access(property, true))
+			return found->withContext(ref_context);
 
 	return nullptr;
 }

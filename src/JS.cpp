@@ -195,9 +195,28 @@ void Context::addDefaults() {
 
 			return args.back();
 		}}},
-		{"pop", {[](Context &, Args &args, Reference *this_obj) -> Value * {
-			return dynamic_cast<Array &>(*this_obj->ultimateValue()).pop();
+		{"pop", {[](Context &, Args &, Reference *this_obj) -> Value * {
+			return dynamic_cast<Array &>(*this_obj->ultimateValue()).pop(1);
 		}}},
+		{"length", {[](Context &context, auto &args, Reference *this_obj) {
+			// Since this is a property, args must have at most a single member (the value to write, if any).
+			// We ignore it because length isn't assignable.
+			assert(args.size() <= 1);
+			auto *array = this_obj->referent->cast<Array>();
+			assert(array != nullptr);
+			auto size = array->effectiveSize();
+			if (args.empty())
+				return context.toValue(size);
+			const auto number = static_cast<double>(*args.front());
+			double intpart = 0.;
+			if (!isFinite(number) || std::modf(number, &intpart) != 0.)
+				throw RangeError("Invalid array length");
+			if (size < number)
+				array->pushEmpty(number - size);
+			else
+				array->pop(size - number);
+			return context.toValue(array->effectiveSize());
+		}, true}},
 	});
 
 	auto *object = makeGlobal<Object>("Object");

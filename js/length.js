@@ -1,0 +1,11 @@
+let a = [1, 2, 3];
+console.log(a.length);
+a.length -= 1;
+console.log(a.length);
+console.log(a, a.length);
+a.push(42);
+console.log(a, a.length);
+a.length += 4;
+console.log(a, a.length);
+a.length = 0;
+console.log(a, a.length);

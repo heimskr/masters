@@ -190,10 +190,14 @@ class Array: public HasMap {
 		Reference * access(const std::string &property, bool can_create) override;
 		Reference * access(double);
 		bool doDelete(Value *) override;
+		/** Doesn't include holes. */
 		size_t size() const;
+		/** Includes holes. */
+		size_t effectiveSize() const;
 		bool empty() const;
 		void push(Value *);
-		Value * pop();
+		void pushEmpty(size_t count);
+		Value * pop(size_t count = 1);
 		VALUE_OPERATOR_OVERRIDES
 		VALUE_USING
 		Value * contains(const Value &) const override;

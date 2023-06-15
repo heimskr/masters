@@ -252,6 +252,12 @@ size_t Array::size() const {
 	return std::get<Holeless>(values).size();
 }
 
+size_t Array::effectiveSize() const {
+	if (isHoley())
+		return holeyLength;
+	return std::get<Holeless>(values).size();
+}
+
 bool Array::empty() const {
 	if (isHoley())
 		return std::get<Holey>(values).empty();
@@ -265,26 +271,53 @@ void Array::push(Value *value) {
 		std::get<Holeless>(values).push_back(context->makeReference(value));
 }
 
-Value * Array::pop() {
+void Array::pushEmpty(size_t count) {
+	if (count == 0)
+		return;
+	convertToHoley();
+	holeyLength += count;
+}
+
+Value * Array::pop(size_t count) {
+	if (count == 0)
+		return make<Undefined>();
+
+	if (count == effectiveSize()) {
+		values = Holeless();
+		holeyLength = -1;
+		return make<Undefined>();
+	}
+
+	Value *out = nullptr;
+
 	if (isHoley()) {
 		auto &holey = std::get<Holey>(values);
 		assert((holeyLength == 0) == (holey.empty()));
-		if (!holey.empty()) {
+		for (size_t i = 0; i < count; ++i) {
+			if (holey.empty())
+				break;
 			auto iter = holey.rbegin().base();
-			auto *out = iter->second;
-			holey.erase(iter);
-			return out;
+			if (iter->first == holeyLength - 1) {
+				out = iter->second->referent;
+				holey.erase(iter);
+			} else {
+				--holeyLength;
+				out = nullptr;
+			}
 		}
 	} else {
 		auto &holeless = std::get<Holeless>(values);
-		if (!holeless.empty()) {
-			auto *out = holeless.back();
-			holeless.pop_back();
-			return out;
+		if (holeless.size() <= count) {
+			if (!holeless.empty())
+				out = holeless.front()->referent;
+			holeless.clear();
+		} else {
+			out = holeless.at(holeless.size() - count);
+			holeless.erase(holeless.begin() + holeless.size() - count, holeless.end());
 		}
 	}
 
-	return make<Undefined>();
+	return out == nullptr? make<Undefined>() : out;
 }
 
 void Array::convertToHoley() {
@@ -295,6 +328,7 @@ void Array::convertToHoley() {
 	size_t i = 0;
 	for (auto *value: std::get<Holeless>(values))
 		holey[i++] = value;
+	holeyLength = holey.size();
 	values = std::move(holey);
 }
 
