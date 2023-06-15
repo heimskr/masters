@@ -321,8 +321,6 @@ Value * BinaryExpression::evaluate(Context &context) {
 Value * BinaryExpression::evaluateAccess(Context &context) {
 	auto saver = context.writeMember();
 
-	bool is_const = false;
-
 	Value *lhs = left->evaluate(context);
 	auto *reference = lhs->cast<Reference>();
 
@@ -336,7 +334,7 @@ Value * BinaryExpression::evaluateAccess(Context &context) {
 	reference = reference->unwrap();
 	assert(reference != nullptr);
 
-	if (is_const)
+	if (reference->isConst)
 		throw JSError("Can't assign to const variable");
 
 	Value *right_value = right->evaluate(context);
