@@ -335,7 +335,7 @@ Value * BinaryExpression::evaluateAccess(Context &context) {
 	assert(reference != nullptr);
 
 	if (reference->isConst)
-		throw JSError("Can't assign to const variable");
+		throw TypeError("Assignment to constant variable");
 
 	Value *right_value = right->evaluate(context);
 
