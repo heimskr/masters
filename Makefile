@@ -4,11 +4,11 @@ DEBUGGER        ?= lldb
 OPTIMIZATION    ?= -O0 -g
 STANDARD        ?= c++20
 WARNINGS        ?= -Wall -Wextra
-CFLAGS          := -std=$(STANDARD) $(OPTIMIZATION) $(WARNINGS) -Iinclude -Ijson/single_include
+CFLAGS          := -std=$(STANDARD) $(OPTIMIZATION) $(WARNINGS) -Iinclude
 OUTPUT          ?= interpreter
 LDFLAGS         ?= -pthread
 
-CLOC_OPTIONS    := --exclude-dir=.vscode,node_modules,json,js --fullpath --not-match-f='^.\/((include|src)\/(flex|bison)\.(cpp|h|output)|.*\.js(on)?)$$'
+CLOC_OPTIONS    := --exclude-dir=.vscode,js --fullpath --not-match-f='^.\/((include|src)\/(flex|bison)\.(cpp|h|output)|.*\.js(on)?)$$'
 
 LEXERCPP        := src/flex.cpp
 PARSERCPP       := src/bison.cpp
