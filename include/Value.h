@@ -37,7 +37,7 @@ class Value {
 		virtual std::string getName() const = 0;
 		virtual std::string className() const = 0;
 		virtual std::unordered_set<Value *> getReferents() const;
-		virtual std::string typeof() const = 0;
+		virtual std::string getTypeof() const = 0;
 
 		virtual const Value * ultimateValue() const { return this; }
 		virtual Value * ultimateValue() { return this; }
@@ -125,7 +125,7 @@ class Null: public Value {
 		ValueType getType() const override { return ValueType::Null; };
 		Number * toNumber() const override;
 		std::string getName() const override { return "Null"; }
-		std::string typeof() const override { return "object"; /* For some reason. */ }
+		std::string getTypeof() const override { return "object"; /* For some reason. */ }
 		explicit operator std::string() const override { return "null"; }
 		explicit operator double() const override { return 0; }
 		explicit operator bool() const override { return false; }
@@ -141,7 +141,7 @@ class Undefined: public Value {
 		ValueType getType() const override { return ValueType::Undefined; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Undefined"; }
-		std::string typeof() const override { return "undefined"; }
+		std::string getTypeof() const override { return "undefined"; }
 		explicit operator std::string() const override { return "undefined"; }
 		explicit operator double() const override { return nan(""); }
 		explicit operator bool() const override { return false; }
@@ -183,7 +183,7 @@ class Array: public HasMap {
 		std::unordered_set<Value *> getReferents() const override;
 		Number * toNumber() const override;
 		std::string getName() const override { return "Array"; }
-		std::string typeof() const override { return "object"; }
+		std::string getTypeof() const override { return "object"; }
 		bool subscriptable() const override { return true; }
 		explicit operator std::string() const override;
 		explicit operator double() const override;
@@ -224,7 +224,7 @@ class Object: public HasMap {
 		std::unordered_set<Value *> getReferents() const override;
 		Number * toNumber() const override;
 		std::string getName() const override { return "Object"; }
-		std::string typeof() const override { return "object"; }
+		std::string getTypeof() const override { return "object"; }
 		bool subscriptable() const override { return true; }
 		explicit operator std::string() const override;
 		explicit operator double() const override { return nan(""); }
@@ -243,7 +243,7 @@ class Number: public HasMap {
 		ValueType getType() const override { return ValueType::Number; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Number"; }
-		std::string typeof() const override { return "number"; }
+		std::string getTypeof() const override { return "number"; }
 		explicit operator std::string() const override;
 		explicit operator double() const override { return number; }
 		explicit operator bool() const override { return static_cast<bool>(number); }
@@ -260,7 +260,7 @@ class Boolean: public HasMap {
 		ValueType getType() const override { return ValueType::Boolean; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Boolean"; }
-		std::string typeof() const override { return "boolean"; }
+		std::string getTypeof() const override { return "boolean"; }
 		explicit operator std::string() const override { return boolean? "true" : "false"; }
 		explicit operator double() const override { return boolean? 1. : 0.; }
 		explicit operator bool() const override { return boolean; }
@@ -277,7 +277,7 @@ class String: public HasMap {
 		ValueType getType() const override { return ValueType::String; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "String"; }
-		std::string typeof() const override { return "string"; }
+		std::string getTypeof() const override { return "string"; }
 		bool subscriptable() const override { return true; }
 		explicit operator std::string() const override { return string; }
 		explicit operator double() const override;
@@ -312,7 +312,7 @@ class Reference: public Value {
 		const Value * ultimateValue() const override { assertReferent(); return referent->ultimateValue(); }
 		Value * ultimateValue() override { assertReferent(); return referent->ultimateValue(); }
 		ValueType ultimateType() const override;
-		std::string typeof() const override { assertReferent(); return referent->typeof(); }
+		std::string getTypeof() const override { assertReferent(); return referent->getTypeof(); }
 		void assertReferent() const { assert(referent != nullptr); }
 		std::unordered_set<Value *> getReferents() const override;
 		Number * toNumber() const override { assertReferent(); return referent->toNumber(); }
@@ -370,7 +370,7 @@ class Function: public HasMap {
 		ValueType getType() const override { return ValueType::Function; }
 		Number * toNumber() const override;
 		std::string getName() const override { return "Function"; }
-		std::string typeof() const override { return "function"; }
+		std::string getTypeof() const override { return "function"; }
 		Object * getFunctionPrototype();
 		explicit operator std::string() const override { return "function(...) {...}"; }
 		explicit operator double()      const override { return nan("");               }

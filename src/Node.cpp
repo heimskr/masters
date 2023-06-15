@@ -1380,7 +1380,7 @@ Value * UnaryExpression::evaluate(Context &context) {
 		}
 
 		case Type::Typeof:
-			return context.makeValue<String>(subexpr->evaluate(context)->typeof());
+			return context.makeValue<String>(subexpr->evaluate(context)->getTypeof());
 
 		case Type::PrefixIncrement:
 		case Type::PrefixDecrement:
