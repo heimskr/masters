@@ -337,7 +337,7 @@ Value * BinaryExpression::evaluateAccess(Context &context) {
 	if (reference->isConst)
 		throw TypeError("Assignment to constant variable");
 
-	Value *right_value = right->evaluate(context);
+	Value *right_value = right->evaluate(context)->shallowCopy();
 
 	Value *left_value = reference;
 	Value *out_value = nullptr;
