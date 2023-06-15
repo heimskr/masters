@@ -659,6 +659,7 @@ std::unique_ptr<Expression> Expression::create(const ASTNode &node) {
 		case JSTOK_MINUSMINUS:
 		case JS_POSTMINUS:
 		case JSTOK_NOT:
+		case JSTOK_TYPEOF:
 			out = std::make_unique<UnaryExpression>(node);
 			break;
 
@@ -1378,6 +1379,9 @@ Value * UnaryExpression::evaluate(Context &context) {
 			return number;
 		}
 
+		case Type::Typeof:
+			return context.makeValue<String>(subexpr->evaluate(context)->typeof());
+
 		case Type::PrefixIncrement:
 		case Type::PrefixDecrement:
 		case Type::PostfixIncrement:
@@ -1418,6 +1422,7 @@ UnaryExpression::Type UnaryExpression::getType(int symbol) {
 		case JS_POSTPLUS:      return Type::PostfixIncrement;
 		case JS_POSTMINUS:     return Type::PostfixDecrement;
 		case JSTOK_NOT:        return Type::LogicalNot;
+		case JSTOK_TYPEOF:     return Type::Typeof;
 		default:
 			throw std::invalid_argument("Unknown symbol in UnaryExpression::getType: " +
 				std::string(jsParser.getName(symbol)));
