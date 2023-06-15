@@ -1389,6 +1389,8 @@ Value * UnaryExpression::evaluate(Context &context) {
 			auto *subvalue = lvalue->evaluate(context);
 			assert(subvalue != nullptr);
 			assert(subvalue->getType() == ValueType::Reference);
+			if (subvalue->cast<Reference>()->isConst)
+				throw TypeError("Assignment to constant variable");
 			if (subvalue->ultimateType() != ValueType::Number)
 				return context.makeValue<Number>(nan(""));
 			auto *number = subvalue->ultimateValue()->cast<Number>();
@@ -1469,7 +1471,7 @@ void VariableDefinition::findVariables(std::vector<VariableUsage> &usages) const
 //     \  / (_| | |  | | (_| | |_) | |  __/ |__| |  __/ | | | | | | | |_| | (_) | | | \__ \.
 //      \/ \__,_|_|  |_|\__,_|_.__/|_|\___|_____/ \___|_| |_|_| |_|_|\__|_|\___/|_| |_|___/
 
-VariableDefinitions::VariableDefinitions(const ASTNode &node): kind(getKind(node.at(0)->symbol)) {
+VariableDefinitions::VariableDefinitions(const ASTNode &node): kind(getKind(node.symbol)) {
 	absorbPosition(node);
 
 	for (const auto *subnode: *node.front())
@@ -1480,17 +1482,20 @@ std::pair<Result, Value *> VariableDefinitions::interpret(Context &context) {
 	for (const auto &definition: definitions) {
 		const auto &name = definition->ident;
 		const bool must_be_unique = kind == DeclarationKind::Let || kind == DeclarationKind::Const;
+		const bool is_const = kind == DeclarationKind::Const;
 
 		if (must_be_unique && context.stack.inLastScope(name))
 			throw std::runtime_error("Name \"" + name + "\" already exists in deepest scope");
 
 		if (definition->value) {
-			Value *evaluated =definition->value->evaluate(context);
+			Value *evaluated = definition->value->evaluate(context);
 			assert(evaluated != nullptr);
 			if (auto *reference = evaluated->cast<Reference>())
-				context.stack.insert(name, evaluated->shallowCopy());
+				context.stack.insert(name, evaluated->shallowCopy(), is_const);
 			else
-				context.stack.insert(name, evaluated);
+				context.stack.insert(name, evaluated, is_const);
+		} else if (is_const) {
+			throw SyntaxError("Missing initializer in const declaration");
 		} else {
 			context.stack.insert(name, context.makeValue<Undefined>());
 		}
